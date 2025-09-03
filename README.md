@@ -34,3 +34,5 @@ Android Studio or Xcode (for device simulators)
 VS Code (optional, for lighter dev environment)
 
 Backend API running locally or remotely (FastAPI, see /apps/backend)
+
+Android Studio, Android Version = 14.0
