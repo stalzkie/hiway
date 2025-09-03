@@ -1,0 +1,5 @@
+supabase==2.*
+pinecone-client==5.*
+sentence-transformers==2.*
+numpy
+python-dotenv
