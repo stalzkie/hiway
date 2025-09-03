@@ -1,16 +1,36 @@
-# hiway_app
+HiWay Frontend (Flutter)
 
-A new Flutter project.
+HiWay is a mobile-first career platform built to solve the Philippines’ persistent skills mismatch.
+This Flutter app serves as the end-user interface for job seekers and employers, optimized for low-end smartphones and spotty data connections.
 
-## Getting Started
+✨ Features
 
-This project is a starting point for a Flutter application.
+AI-Powered Resume Builder
+Upload or input details → auto-generate a clean, professional resume.
 
-A few resources to get you started if this is your first Flutter project:
+AI Roadmap Generator
+Choose a target role → receive a personalized upskilling roadmap with confidence scores, suggested courses, and timelines.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Job Timeline
+Social-feed style board of job postings, each showing user-specific confidence scores.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Median Salary Tags
+Role-based salary insights to prevent underpayment.
+
+Dynamic Profile Updates
+Profiles refresh automatically as users gain new skills or complete roadmap milestones.
+
+Inclusive UX
+Lightweight, mobile-first Progressive Web App (PWA) design accessible to provincial and grassroots users.
+
+📦 Requirements
+
+Flutter SDK >=3.0.0
+
+Dart >=3.0.0
+
+Android Studio or Xcode (for device simulators)
+
+VS Code (optional, for lighter dev environment)
+
+Backend API running locally or remotely (FastAPI, see /apps/backend)
