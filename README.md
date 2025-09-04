@@ -44,3 +44,10 @@ DB: Supabase
 Backend: FastPI
 
 LLM: OpenAPI
+
+COMMANDS & GUIDE
+Backend
+uvicorn apps.backend.app:app --reload --port 8000
+
+FastAPI testing
+http://localhost:8000/docs
