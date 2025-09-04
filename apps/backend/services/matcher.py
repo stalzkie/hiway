@@ -5,28 +5,12 @@ import os
 import sys
 from typing import Dict, List, Any, Iterable, Optional, Tuple
 
-from pinecone import Pinecone
-from supabase import create_client, Client
-
-# ---------------------- Config / Clients ----------------------
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-if not (PINECONE_API_KEY and PINECONE_INDEX and SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
-    missing = [k for k, v in {
-        "PINECONE_API_KEY": PINECONE_API_KEY,
-        "PINECONE_INDEX": PINECONE_INDEX,
-        "SUPABASE_URL": SUPABASE_URL,
-        "SUPABASE_SERVICE_ROLE_KEY": SUPABASE_SERVICE_ROLE_KEY
-    }.items() if not v]
-    raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
-
-PC = Pinecone(api_key=PINECONE_API_KEY)
-INDEX = PC.Index(PINECONE_INDEX)
-
-SB: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+# Best-effort: load .env if available (harmless if already loaded elsewhere)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 # ---------------------- Namespaces / Weights ----------------------
 SEEKER_NS = os.getenv("PINECONE_NS_JOB_SEEKERS", "job_seekers")
@@ -41,12 +25,57 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "licenses": 0.15,
 }
 
+# ---------------------- Reranker Config (BERT/Cross-Encoder) ----------------------
+RERANK_ENABLE = os.getenv("RERANK_ENABLE", "0") == "1"
+RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+RERANK_ALPHA = float(os.getenv("RERANK_ALPHA", "0.7"))  # 0..1 (higher = trust Pinecone more)
+RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "50"))
+
+# ---------------------- Lazy client creation ----------------------
+_PC = None
+_INDEX = None
+_SB = None
+_CE = None  # cross-encoder model (lazy)
+
+def _require_env() -> None:
+    missing = [
+        k for k in ("PINECONE_API_KEY", "PINECONE_INDEX", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY")
+        if not os.getenv(k)
+    ]
+    if missing:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+def _get_clients():
+    """Create and cache Pinecone index + Supabase client lazily."""
+    global _PC, _INDEX, _SB
+    if _INDEX is not None and _SB is not None:
+        return _INDEX, _SB
+
+    _require_env()
+
+    from pinecone import Pinecone
+    from supabase import create_client
+
+    _PC = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    _INDEX = _PC.Index(os.getenv("PINECONE_INDEX"))
+    _SB = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+    return _INDEX, _SB
+
+# Backwards-compatible SB symbol for callers that import SB directly.
+# This proxy defers real client creation until first attribute access.
+class _SBProxy:
+    def __getattr__(self, name: str):
+        _, sb = _get_clients()
+        return getattr(sb, name)
+
+SB = _SBProxy()
+
 # ---------------------- Helpers ----------------------
 def _effective_weights(weights: Optional[Dict[str, float]]) -> Dict[str, float]:
     """Validate and return usable weights for all scopes."""
     if not weights:
         return DEFAULT_WEIGHTS.copy()
-    out = {}
+    out: Dict[str, float] = {}
     for s in VALID_SCOPES:
         out[s] = float(weights.get(s, DEFAULT_WEIGHTS[s]))
     return out
@@ -54,21 +83,55 @@ def _effective_weights(weights: Optional[Dict[str, float]]) -> Dict[str, float]:
 def get_seeker_vectors(job_seeker_id: str, scopes: Iterable[str] = VALID_SCOPES) -> Dict[str, List[float]]:
     """
     Fetch the seeker's section vectors from Pinecone.
+    Handles SDK variations (dict/list/Vector objects).
     Returns only sections found and non-empty.
     """
+    INDEX, _ = _get_clients()
+
     ids = [f"{job_seeker_id}:{s}" for s in scopes]
     fetch_res = INDEX.fetch(ids=ids, namespace=SEEKER_NS)
-    vectors: Dict[str, List[float]] = {}
-    for vid, payload in (getattr(fetch_res, "vectors", None) or {}).items():
+
+    out: Dict[str, List[float]] = {}
+
+    def _add(vid: Optional[str], vobj: Any):
+        if not vid:
+            vid = (vobj.get("id") if isinstance(vobj, dict) else getattr(vobj, "id", None))
+        if not vid or ":" not in vid:
+            return
         try:
-            scope = vid.split(":")[1]
+            scope = vid.split(":", 1)[1]
         except Exception:
-            continue
-        if scope in VALID_SCOPES:
-            vals = payload.get("values") or []
-            if vals:
-                vectors[scope] = vals
-    return vectors
+            return
+        if scope not in VALID_SCOPES:
+            return
+        vals = (
+            vobj.get("values") if isinstance(vobj, dict)
+            else getattr(vobj, "values", None)
+        ) or []
+        if vals:
+            out[scope] = list(vals)
+
+    # Normalize all possible shapes
+    vectors_obj = getattr(fetch_res, "vectors", None)
+    if isinstance(vectors_obj, dict):
+        # {id -> Vector or dict}
+        for vid, v in vectors_obj.items():
+            _add(vid, v)
+    elif isinstance(vectors_obj, list):
+        # [Vector or dict]
+        for v in vectors_obj:
+            _add(None, v)
+    elif isinstance(fetch_res, dict):
+        # {"vectors": {...}} or {"vectors": [...]}
+        v = fetch_res.get("vectors", {})
+        if isinstance(v, dict):
+            for vid, vv in v.items():
+                _add(vid, vv)
+        elif isinstance(v, list):
+            for vv in v:
+                _add(None, vv)
+
+    return out
 
 def _query_section(scope: str, vector: List[float], top_k: int = 20) -> List[Dict[str, Any]]:
     """
@@ -77,12 +140,13 @@ def _query_section(scope: str, vector: List[float], top_k: int = 20) -> List[Dic
     """
     if not vector:
         return []
+    INDEX, _ = _get_clients()
     res = INDEX.query(
         vector=vector,
         top_k=top_k,
         namespace=POST_NS,
         filter={"scope": {"$eq": scope}},
-        include_metadata=True
+        include_metadata=True,
     )
     # SDK may return a dict or an object; normalize
     return res.get("matches", []) if isinstance(res, dict) else (getattr(res, "matches", None) or [])
@@ -134,9 +198,188 @@ def _aggregate_scores(
         ranked.append({
             "job_post_id": pid,
             "confidence": round(confidence, 2),
-            "section_scores": section_scores_out
+            "section_scores": section_scores_out,
         })
 
+    ranked.sort(key=lambda d: d["confidence"], reverse=True)
+    return ranked
+
+# ---------------------- Text builders for cross-encoder ----------------------
+def _coerce_to_list(field) -> List[str]:
+    if field is None:
+        return []
+    if isinstance(field, list):
+        return [str(x).strip() for x in field if str(x).strip()]
+    if isinstance(field, str):
+        return [x.strip() for x in field.split(",") if x.strip()]
+    if isinstance(field, dict):
+        return [str(k).strip() for k, v in field.items() if str(k).strip()]
+    return []
+
+def _stringify(x: Any) -> str:
+    if x is None:
+        return ""
+    if isinstance(x, str):
+        return x
+    try:
+        import json as _json
+        return _json.dumps(x, ensure_ascii=False)
+    except Exception:
+        return str(x)
+
+def _get_seeker_text(job_seeker_id: str) -> str:
+    """
+    Build a readable text description of the seeker's profile for cross-encoder input.
+    Falls back gracefully if some columns are missing.
+    """
+    _, SB_real = _get_clients()
+    cols = "full_name, email, skills, experience, education, licenses_certifications"
+    try:
+        resp = (
+            SB_real.table("job_seeker")
+            .select(cols)
+            .eq("job_seeker_id", job_seeker_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        return ""
+
+    if not resp.data:
+        return ""
+
+    row = resp.data[0] or {}
+    parts: List[str] = []
+    if row.get("full_name"):
+        parts.append(f"Name: {row.get('full_name')}")
+    if row.get("skills"):
+        parts.append("Skills: " + ", ".join(_coerce_to_list(row.get("skills"))))
+    if row.get("experience"):
+        parts.append("Experience: " + _stringify(row.get("experience")))
+    if row.get("education"):
+        parts.append("Education: " + _stringify(row.get("education")))
+    if row.get("licenses_certifications"):
+        parts.append("Licenses/Certs: " + ", ".join(_coerce_to_list(row.get("licenses_certifications"))))
+    return " | ".join(parts)
+
+def _get_post_text(post_row: Dict[str, Any]) -> str:
+    """
+    Build a readable text description of the job post for cross-encoder input.
+    """
+    parts: List[str] = []
+    title = post_row.get("job_title") or post_row.get("title") or ""
+    company = post_row.get("company") or post_row.get("employer") or ""
+    if title or company:
+        parts.append(f"{title} at {company}".strip())
+    if post_row.get("job_overview"):
+        parts.append(_stringify(post_row.get("job_overview")))
+    if post_row.get("job_skills"):
+        parts.append("Required skills: " + ", ".join(_coerce_to_list(post_row.get("job_skills"))))
+    if post_row.get("job_experience"):
+        parts.append("Experience req: " + _stringify(post_row.get("job_experience")))
+    if post_row.get("job_education"):
+        parts.append("Education req: " + _stringify(post_row.get("job_education")))
+    if post_row.get("job_licenses_certifications"):
+        parts.append("Licenses/Certs: " + _stringify(post_row.get("job_licenses_certifications")))
+    return " | ".join(parts)
+
+# ---------------------- Cross-encoder (lazy) ----------------------
+def _get_cross_encoder():
+    """
+    Lazy-load the sentence-transformers CrossEncoder.
+    Returns None if unavailable to avoid hard dependency.
+    """
+    global _CE
+    if _CE is not None:
+        return _CE
+    if not RERANK_ENABLE:
+        return None
+    try:
+        from sentence_transformers import CrossEncoder
+        _CE = CrossEncoder(RERANK_MODEL)  # downloads on first use
+        return _CE
+    except Exception:
+        # If torch or the model isn't available, silently disable reranking
+        return None
+
+def _minmax_to_0_100(vals: List[float]) -> List[float]:
+    if not vals:
+        return []
+    vmin = min(vals)
+    vmax = max(vals)
+    if vmax <= vmin:
+        return [50.0 for _ in vals]  # flat case
+    return [ (v - vmin) / (vmax - vmin) * 100.0 for v in vals ]
+
+def _apply_reranker(
+    job_seeker_id: str,
+    ranked: List[Dict[str, Any]],
+    include_job_details: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Re-score top candidates with a cross-encoder and blend with Pinecone confidence.
+    """
+    if not RERANK_ENABLE:
+        return ranked
+
+    ce = _get_cross_encoder()
+    if ce is None:
+        return ranked  # gracefully skip
+
+    if not ranked:
+        return ranked
+
+    # Ensure we have job_post rows to build text; fetch if necessary.
+    _, SB_real = _get_clients()
+    if include_job_details:
+        # best-effort: details may already be attached by caller rank_posts_for_seeker
+        has_details_for_all = all("job_post" in r and r["job_post"] for r in ranked)
+    else:
+        has_details_for_all = False
+
+    if not has_details_for_all:
+        pids = [r["job_post_id"] for r in ranked]
+        details_map: Dict[str, Any] = {}
+        CHUNK = 200
+        for i in range(0, len(pids), CHUNK):
+            chunk = pids[i:i+CHUNK]
+            resp = SB_real.table("job_post").select("*").in_("job_post_id", chunk).execute()
+            for row in (resp.data or []):
+                details_map[str(row.get("job_post_id"))] = row
+        for r in ranked:
+            r.setdefault("job_post", details_map.get(r["job_post_id"]))
+
+    seeker_text = _get_seeker_text(job_seeker_id)
+    if not seeker_text:
+        # If we can't build seeker text, skip reranking
+        return ranked
+
+    # Create pairs for the top N
+    top = ranked[: max(1, RERANK_TOP_K)]
+    pairs: List[Tuple[str, str]] = []
+    for r in top:
+        post_row = r.get("job_post") or {}
+        post_text = _get_post_text(post_row)
+        if not post_text:
+            post_text = str(post_row or "")
+        pairs.append((seeker_text, post_text))
+
+    try:
+        # Predict returns higher-is-better relevance scores
+        scores = ce.predict(pairs).tolist()  # type: ignore[attr-defined]
+    except Exception:
+        return ranked  # silently skip on runtime error
+
+    # Normalize 0..100
+    scores_norm = _minmax_to_0_100(scores)
+
+    # Blend with Pinecone confidence
+    for r, rr in zip(top, scores_norm):
+        pine = float(r.get("confidence", 0.0))
+        blended = RERANK_ALPHA * pine + (1.0 - RERANK_ALPHA) * rr
+        r["confidence"] = round(float(blended), 2)
+
+    # Re-sort entire list (only top part changed)
     ranked.sort(key=lambda d: d["confidence"], reverse=True)
     return ranked
 
@@ -148,7 +391,8 @@ def rank_posts_for_seeker(
     include_job_details: bool = False,
     min_sections: int = 1,
 ) -> List[Dict[str, Any]]:
-    """Rank job posts for a seeker by aggregating cosine similarities across sections."""
+    """Rank job posts for a seeker by aggregating cosine similarities across sections,
+    then (optionally) refine with a BERT/miniLM cross-encoder reranker."""
     weights_eff = _effective_weights(weights)
 
     # 1) Seeker vectors
@@ -164,24 +408,39 @@ def rank_posts_for_seeker(
     # 3) Aggregate to weighted confidence
     ranked = _aggregate_scores(section_results, weights_eff, min_sections=min_sections)
 
-    # 4) Optionally include job_post rows
-    if include_job_details and ranked:
+    # 4) Optionally include job_post rows (for endpoints and/or reranker)
+    if (include_job_details or RERANK_ENABLE) and ranked:
+        _, SB_real = _get_clients()
         pids = [r["job_post_id"] for r in ranked]
         details_map: Dict[str, Any] = {}
         CHUNK = 200
         for i in range(0, len(pids), CHUNK):
             chunk = pids[i:i+CHUNK]
-            resp = SB.table("job_post").select("*").in_("job_post_id", chunk).execute()
+            resp = SB_real.table("job_post").select("*").in_("job_post_id", chunk).execute()
             for row in (resp.data or []):
                 details_map[str(row.get("job_post_id"))] = row
         for r in ranked:
-            r["job_post"] = details_map.get(r["job_post_id"])
+            if include_job_details:
+                r["job_post"] = details_map.get(r["job_post_id"])
+            else:
+                # keep it available for reranker only (not returned if include_job_details=False)
+                r.setdefault("job_post", details_map.get(r["job_post_id"]))
+
+    # 5) Optional cross-encoder rerank (blended confidence)
+    ranked = _apply_reranker(job_seeker_id, ranked, include_job_details)
+
+    # 6) If we fetched job_post just for reranker but the caller didn't request it,
+    # strip it to keep the payload lean.
+    if not include_job_details:
+        for r in ranked:
+            r.pop("job_post", None)
 
     return ranked
 
 def get_seeker_id_by_email(email: str) -> Optional[str]:
     """Resolve a job_seeker_id from a seeker email. Returns None if not found."""
-    resp = SB.table("job_seeker").select("job_seeker_id").eq("email", email).limit(1).execute()
+    _, SB_real = _get_clients()
+    resp = SB_real.table("job_seeker").select("job_seeker_id").eq("email", email).limit(1).execute()
     if not resp.data:
         return None
     return resp.data[0]["job_seeker_id"]
@@ -206,7 +465,7 @@ def rank_posts_for_seeker_by_email(
     )
 
 __all__ = [
-    "SB",
+    "SB",  # proxy
     "rank_posts_for_seeker",
     "rank_posts_for_seeker_by_email",
     "get_seeker_id_by_email",
