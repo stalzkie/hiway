@@ -1,3 +1,4 @@
+# apps/backend/api/endpoints/scraper.py
 from __future__ import annotations
 
 import os
@@ -11,7 +12,9 @@ from pydantic import BaseModel, Field
 from ...services.scraper import (
     _llm_generate_roadmap,
     search_sections_for_milestone,
+    CERT_ALLOWED_DOMAINS,
 )
+from ...services.data_storer import persist_scraper_roadmap_with_resources
 
 router = APIRouter()
 
@@ -38,6 +41,7 @@ class MilestoneBundle(BaseModel):
 
 class ScraperResponse(BaseModel):
     role: str = Field(..., description="The role keyword you searched")
+    roadmap_id: str | None = Field(None, description="Supabase roadmap_id for this role")
     count: int = Field(..., description="Number of milestones returned")
     milestones: list[MilestoneBundle]
 
@@ -48,7 +52,6 @@ def _coerce_items(items: list[Any]) -> list[ResourceItem]:
         if isinstance(it, dict):
             out.append(ResourceItem(**{k: it.get(k) for k in ("title", "url", "source")}))
         else:
-            # services may return a simple object with attributes
             out.append(
                 ResourceItem(
                     title=getattr(it, "title", None),
@@ -69,7 +72,8 @@ def _coerce_items(items: list[Any]) -> list[ResourceItem]:
         "Then fills each milestone with 3 Resources (free-first, PH-first), "
         "resolves the 3 specific certifications to exact URLs with strict checks, "
         "and finds 3 Network Groups (FB/forums/communities; PH-first). "
-        "Global URL dedup ensures no link repeats across milestones or sections."
+        "Global URL dedup ensures no link repeats across milestones or sections. "
+        "The roadmap and milestone resources are also persisted into Supabase."
     ),
 )
 def scrape(
@@ -110,6 +114,7 @@ def scrape(
         bundles: list[MilestoneBundle] = []
         used_urls: Set[str] = set()
         used_cert_names: Set[str] = set()
+        milestone_resources: list[tuple] = []
 
         for m in roadmap[:max_milestones]:
             title = (m.get("milestone") or "").strip()
@@ -125,6 +130,8 @@ def scrape(
                 serpapi_key=SERPAPI_KEY,
             )
 
+            milestone_resources.append((resources, certs, groups))
+
             bundles.append(
                 MilestoneBundle(
                     milestone=title,
@@ -135,7 +142,18 @@ def scrape(
                 )
             )
 
-        return ScraperResponse(role=keyword, count=len(bundles), milestones=bundles)
+        # 3) Persist roadmap + resources into Supabase
+        roadmap_id = persist_scraper_roadmap_with_resources(
+            role=keyword,
+            provider=LLM_PROVIDER,
+            model=(GEMINI_MODEL if LLM_PROVIDER == "gemini" else OPENAI_MODEL),
+            milestones=roadmap,
+            prompt_template_or_hashable="default-roadmap-prompt",
+            cert_allowlist_or_hashable=CERT_ALLOWED_DOMAINS,
+            milestone_resources=milestone_resources,
+        )
+
+        return ScraperResponse(role=keyword, roadmap_id=roadmap_id, count=len(bundles), milestones=bundles)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

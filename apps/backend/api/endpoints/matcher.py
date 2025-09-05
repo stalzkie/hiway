@@ -9,6 +9,7 @@ from apps.backend.services.matcher import (
     match_and_enrich,
     get_seeker_id_by_email,
 )
+from apps.backend.services.data_storer import persist_matcher_results
 
 router = APIRouter()
 
@@ -62,7 +63,8 @@ class MatchResponse(BaseModel):
     description=(
         "Returns job posts ranked for the given job seeker via Pinecone cosine similarities, "
         "optionally reranked with a cross-encoder and enriched with LLM explanations. "
-        "Provide either job_seeker_id or email (email will be resolved to a seeker UUID)."
+        "Provide either job_seeker_id or email (email will be resolved to a seeker UUID). "
+        "Results are also persisted to Supabase in job_match_scores/job_match_scores_cache."
     ),
 )
 def match_seeker_to_jobs(
@@ -90,10 +92,11 @@ def match_seeker_to_jobs(
     ),
 ):
     """
-    Thin endpoint that delegates:
-      1) ranking to services.matcher.rank_posts_for_seeker
-      2) (optional) reranking
-      3) enrichment (skill analysis, LLM explanations) to services.matcher.match_and_enrich
+    Endpoint flow:
+      1) Resolve job_seeker_id (from email if provided).
+      2) Call services.matcher.match_and_enrich to compute scores + explanations.
+      3) Persist results to Supabase (job_match_scores, with cache maintained by trigger).
+      4) Return structured response to client.
     """
     # Resolve seeker id via email when provided
     if email and not job_seeker_id:
@@ -113,8 +116,20 @@ def match_seeker_to_jobs(
             include_explanations=include_explanations,
         )
     except Exception as e:
-        # Surface a concise error up the stack
         raise HTTPException(status_code=500, detail=str(e))
+
+    # Persist results to Supabase
+    try:
+        persist_matcher_results(
+            auth_user_id=None,  # If you want, pass through request.user.id
+            job_seeker_id=job_seeker_id,
+            matcher_results=results,
+            default_weights=None,
+            method="pinecone+rerank",
+            model_version="api-endpoint",
+        )
+    except Exception as e:
+        print(f"[WARN] Failed to persist matcher results: {e}")
 
     # Pydantic validation & response shaping
     return MatchResponse(

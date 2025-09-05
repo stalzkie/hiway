@@ -3,6 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from apps.backend.api.endpoints import orchestrator
 
 # ---- Load environment variables early ----
 # Try repo root and backend folder
@@ -35,6 +36,7 @@ app.add_middleware(
 # ---- Routers ----
 app.include_router(matcher.router, prefix="/matcher", tags=["matcher"])
 app.include_router(scraper.router, prefix="/scraper", tags=["scraper"])
+app.include_router(orchestrator.router, prefix="/api", tags=["Orchestrator"])
 
 # ---- Healthcheck ----
 @app.get("/healthz")
