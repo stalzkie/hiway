@@ -193,15 +193,15 @@ def process_job_post_batch() -> int:
 
 # ---------------------- Main ----------------------
 def main():
-    print("🔄 Embed worker running…")
+    print("Embed worker running…")
     while True:
         c_seekers = process_job_seeker_batch()
         c_posts = process_job_post_batch()
 
         if c_seekers or c_posts:
-            print(f"✅ Processed: job_seekers={c_seekers}, job_posts={c_posts}")
+            print(f"Processed: job_seekers={c_seekers}, job_posts={c_posts}")
         else:
-            print("⏳ No pending rows. Sleeping...")
+            print("No pending rows. Sleeping...")
             time.sleep(SLEEP)
 
 if __name__ == "__main__":

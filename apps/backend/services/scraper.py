@@ -4,6 +4,7 @@ import os
 import re
 import json
 from typing import List, Dict, Any, Optional, Tuple, Set
+from .data_storer import persist_scraper_roadmap_with_resources
 
 import requests
 import urllib.parse
@@ -31,47 +32,35 @@ def _best_soup(html: str):
 
 # -------- Certificate domain guards (EXPANDED + issuers) --------
 CERT_ALLOWED_DOMAINS: List[str] = [
-    # Google / Google Cloud / Skillshop
     "grow.google",
     "skillshop.withgoogle.com",
     "skillshop.exceedlms.com",
     "cloud.google.com",
     "cloudskillsboost.google",
     "developers.google.com",
-
-    # MOOCs / learning platforms w/ credential pages
     "coursera.org",
     "edx.org",
     "udacity.com",
     "deeplearning.ai",
-
-    # HubSpot / SEO issuers
     "academy.hubspot.com",
     "semrush.com",
     "moz.com",
     "academy.moz.com",
     "yoast.com",
-
-    # Accounting issuers
     "academy.intuit.com",
     "quickbooks.intuit.com",
     "xero.com",
-
-    # Big tech issuers
     "ibm.com",
     "learn.microsoft.com",
-    "microsoft.com",  # some cert detail pages redirect here
+    "microsoft.com",
     "aws.amazon.com",
     "aws.training",
     "tableau.com",
     "tensorflow.org",
-    "pythoninstitute.org",  # PCEP/PCAP
+    "pythoninstitute.org",
     "oracle.com",
     "cisco.com",
-    "tensorflow.org",
     "cloudera.com",
-
-    # Others that sometimes host official cert/training pages
     "sas.com",
     "datacamp.com",
     "alison.com",
@@ -81,7 +70,50 @@ CERT_ALLOWED_DOMAINS: List[str] = [
     "support.google.com",
     "academy.adobe.com",
     "certification.adobe.com",
-    "credly.com",  # issuer-backed badges
+    "credly.com",
+    "comptia.org",
+    "ec-council.org",
+    "isaca.org",
+    "offensive-security.com",
+    "giac.org",
+    "redhat.com",
+    "vmware.com",
+    "fortinet.com",
+    "splunk.com",
+    "pmi.org",
+    "scrum.org",
+    "scrumalliance.org",
+    "cfainstitute.org",
+    "accaglobal.com",
+    "hbr.org",
+    "autodesk.com",
+    "unity.com",
+    "unrealengine.com",
+    "adobe.com",
+    "medscape.org",
+    "who.int",
+    "ama-assn.org",
+    "nursingworld.org",
+    "osha.gov",
+    "nccer.org",
+    "hvacexcellence.org",
+    "nsc.org",
+    "linkedin.com/learning",
+    "ahrefs.com/academy",
+    "mailchimp.com/resources/certification",
+    "hootsuite.com/education",
+    "meta.com/blueprint",
+    "twitterflightschool.com",
+    "tiktokacademy.com",
+    "google.com/partners",
+    "upwork.com/academy",
+    "fiverr.com/learn",
+    "gohighlevel.com",
+    "canva.com/designschool/certifications",
+    "blender.org/certification",
+    "gcfglobal.org",
+    "ic3digitalliteracy.org",
+    "typing.com",
 ]
 
 # Explicitly NOT treating these as cert issuers for direct cert URLs
@@ -664,8 +696,58 @@ def search_sections_for_milestone(
 
     return resources, certs, network_groups
 
+def generate_and_store_roadmap(
+    job_seeker_id: str,
+    role: str,
+    max_milestones: int = 5,
+    provider: str = "auto",
+    gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY"),
+    openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
+    serpapi_key: Optional[str] = os.getenv("SERPAPI_API_KEY"),
+) -> str:
+    """
+    High-level orchestration for roadmap creation:
+      1) Generate milestones + cert names (LLM).
+      2) Resolve resources, certifications, and network groups.
+      3) Persist roadmap + resources into Supabase, linked to job_seeker_id.
+    Returns roadmap_id.
+    """
+    # 1) Generate roadmap
+    milestones = _llm_generate_roadmap(
+        role, max_milestones, provider, gemini_api_key, openai_api_key, openai_model, gemini_model
+    )
+    if not milestones:
+        return ""
+
+    # 2) Collect resources per milestone
+    used_urls: Set[str] = set()
+    used_cert_names: Set[str] = set()
+    milestone_resources = []
+    for ms in milestones:
+        res, certs, groups = search_sections_for_milestone(
+            ms.get("milestone", ""), ms.get("cert_names", []), used_urls, used_cert_names, serpapi_key
+        )
+        milestone_resources.append((res, certs, groups))
+
+    # 3) Persist to Supabase (now linked to job_seeker_id)
+    roadmap_id = persist_scraper_roadmap_with_resources(
+        job_seeker_id=job_seeker_id,
+        role=role,
+        provider=provider,
+        model=(gemini_model if provider == "gemini" else openai_model),
+        milestones=milestones,
+        prompt_template_or_hashable="default-roadmap-prompt",
+        cert_allowlist_or_hashable=CERT_ALLOWED_DOMAINS,
+        milestone_resources=milestone_resources,
+    )
+
+    return roadmap_id
 # -------- Re-export for endpoints --------
 __all__ = [
     "_llm_generate_roadmap",
     "search_sections_for_milestone",
+    "generate_and_store_roadmap",
 ]
+
