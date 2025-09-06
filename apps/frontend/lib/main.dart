@@ -1,21 +1,54 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
+=======
+import 'package:flutter/services.dart';
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/pages/auth/auth_wrapper.dart';
+<<<<<<< HEAD
 import 'package:hiway_app/pages/auth/login_page.dart';
 import 'package:hiway_app/pages/auth/signup_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+=======
+
+import 'package:hiway_app/pages/auth/login_page.dart';
+import 'package:hiway_app/pages/auth/signup_page.dart';
+import 'package:hiway_app/pages/employer/dashboard.dart';
+import 'package:hiway_app/pages/home/home_page.dart';
+import 'package:hiway_app/pages/job_seeker/dashboard.dart';
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+<<<<<<< HEAD
+=======
+  await _configureSystemUI();
+
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   await dotenv.load(fileName: ".env");
   await SupabaseConfig.initialize();
 
   runApp(const MyApp());
 }
 
+<<<<<<< HEAD
+=======
+Future<void> _configureSystemUI() async {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+}
+
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -65,6 +98,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+<<<<<<< HEAD
 
 class _AuthWrapperState extends State<AuthWrapper> {
   @override
@@ -149,3 +183,5 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+=======
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe

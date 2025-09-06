@@ -72,7 +72,11 @@ class Validators {
     }
 
     final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+<<<<<<< HEAD
     if (digitsOnly.length != 12) {
+=======
+    if (digitsOnly.length != 11) {
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       return 'Please enter a valid phone number with 12 digits.';
     }
 

@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+<<<<<<< HEAD
 import 'package:hiway_app/main.dart';
 import 'package:hiway_app/pages/auth/login_page.dart';
+=======
+import 'package:hiway_app/pages/auth/login_page.dart';
+import 'package:hiway_app/pages/employer/dashboard.dart';
+import 'package:hiway_app/pages/home/home_page.dart';
+import 'package:hiway_app/pages/job_seeker/dashboard.dart';
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

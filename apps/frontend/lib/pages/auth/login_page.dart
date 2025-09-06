@@ -43,6 +43,7 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text,
       );
 
+<<<<<<< HEAD
       if (response.user != null) {
         _showSuccessSnackBar(AppConstants.loginSuccess);
 
@@ -60,6 +61,10 @@ class _LoginPageState extends State<LoginPage> {
           }
           _showSuccessSnackBar(AppConstants.loginSuccess);
         }
+=======
+      if (response.user != null && mounted) {
+        _showSuccessSnackBar(AppConstants.loginSuccess);
+>>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       }
     } catch (e) {
       if (mounted) {
