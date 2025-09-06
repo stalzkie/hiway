@@ -115,10 +115,7 @@ class LoadingButton extends StatelessWidget {
     this.backgroundColor,
     this.foregroundColor,
     this.borderRadius,
-<<<<<<< HEAD
-=======
     this.isPrimary = true,
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   });
 
   @override
@@ -131,19 +128,19 @@ class LoadingButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isEnabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor = _getBackgroundColor(isEnabled),
-          foregroundColor = _getForegroundColor(),
-          disabledBackgroundColor = AppColors.surface.withValues(alpha: 0.6),
-          disabledForegroundColor = AppColors.dark.withValues(alpha: 0.4),
-          elevation = isPrimary && isEnabled ? 2 : 0,
-          shadowColor = AppColors.primary.withValues(alpha: 0.3),
-          shape = RoundedRectangleBorder(
+          backgroundColor: _getBackgroundColor(isEnabled),
+          foregroundColor: _getForegroundColor(),
+          disabledBackgroundColor: AppColors.surface.withValues(alpha: 0.6),
+          disabledForegroundColor: AppColors.dark.withValues(alpha: 0.4),
+          elevation: isPrimary && isEnabled ? 2 : 0,
+          shadowColor: AppColors.primary.withValues(alpha: 0.3),
+          shape: RoundedRectangleBorder(
             borderRadius: borderRadius ?? BorderRadius.circular(12),
-          ), {super.key},
+          ),
         ),
         child: AnimatedSwitcher(
-          duration = const Duration(milliseconds: 200),
-          child = isLoading ? _buildLoadingContent() : child,
+          duration: const Duration(milliseconds: 200),
+          child: isLoading ? _buildLoadingContent() : child,
         ),
       ),
     );

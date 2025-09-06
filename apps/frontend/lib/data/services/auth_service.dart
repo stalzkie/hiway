@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 // auth_service.dart - Improved version
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/core/error/exceptions.dart';
@@ -22,10 +19,7 @@ class AuthService {
 
   Stream<AuthState> get authStateStream => _auth.onAuthStateChange;
 
-<<<<<<< HEAD
-=======
   // Sign in with email and password
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   Future<AuthResponse> signInWithEmail({
     required String email,
     required String password,
@@ -37,16 +31,6 @@ class AuthService {
       );
 
       if (response.user == null) {
-<<<<<<< HEAD
-        throw Exception('No user found');
-      }
-
-      return response;
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      throw e.toAuthException();
-=======
         throw AuthException('Login failed - no user returned');
       }
 
@@ -55,7 +39,6 @@ class AuthService {
       throw AuthException('Login failed: ${e.message}');
     } catch (e) {
       throw AuthException('Login failed: ${e.toString()}');
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
     }
   }
 
@@ -70,19 +53,6 @@ class AuthService {
       );
 
       if (response.user == null) {
-<<<<<<< HEAD
-        throw Exception('No user found');
-      }
-      return response;
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      throw e.toAuthException();
-    }
-  }
-
-  // Create job seeker profile
-=======
         throw AuthException('Registration failed - no user returned');
       }
       return response;
@@ -94,17 +64,10 @@ class AuthService {
   }
 
   // Create job seeker profile with better error handling
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   Future<JobSeekerModel> createJobSeekerProfile({
     required String fullName,
     required String email,
     String? phone,
-<<<<<<< HEAD
-  }) async {
-    try {
-      final user = currentUser;
-      if (user == null) throw Exception('No user found');
-=======
     String? address,
   }) async {
     try {
@@ -112,23 +75,18 @@ class AuthService {
       if (user == null) {
         throw AuthException('No authenticated user found');
       }
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 
       final data = {
         'auth_user_id': user.id,
         'full_name': fullName.trim(),
         'email': email.trim(),
         'phone': phone?.trim(),
-<<<<<<< HEAD
-        'role': AppConstants.jobSeekerRole,
-=======
         'address': address?.trim(),
         'role': AppConstants.jobSeekerRole,
         'skills': [],
         'experience': [],
         'education': [],
         'licenses_certifications': [],
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       };
 
       final response = await _client
@@ -139,38 +97,24 @@ class AuthService {
 
       return JobSeekerModel.fromJson(response);
     } on PostgrestException catch (e) {
-<<<<<<< HEAD
-      throw DatabaseException(e.message);
-=======
       if (e.code == '23505') {
         throw DatabaseException('Profile already exists for this user');
       }
       throw DatabaseException('Database error: ${e.message}');
     } on AuthException {
       rethrow;
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
     } catch (e) {
       throw DatabaseException('Failed to create job seeker profile: $e');
     }
   }
 
-<<<<<<< HEAD
-  // Create employer profile
-=======
   // Create employer profile with better error handling
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   Future<EmployerModel> createEmployerProfile({
     required String name,
     required String company,
     required String companyPosition,
     String? companyEmail,
     String? companyPhoneNumber,
-<<<<<<< HEAD
-  }) async {
-    try {
-      final user = currentUser;
-      if (user == null) throw Exception('No user found');
-=======
     String? dtiOrSecRegistration,
     String? barangayClearance,
     String? businessPermit,
@@ -180,7 +124,6 @@ class AuthService {
       if (user == null) {
         throw AuthException('No authenticated user found');
       }
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 
       final data = {
         'auth_user_id': user.id,
@@ -189,12 +132,9 @@ class AuthService {
         'company_position': companyPosition.trim(),
         'company_email': companyEmail?.trim(),
         'company_phone_number': companyPhoneNumber?.trim(),
-<<<<<<< HEAD
-=======
         'dti_or_sec_registration': dtiOrSecRegistration?.trim(),
         'barangay_clearance': barangayClearance?.trim(),
         'business_permit': businessPermit?.trim(),
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
         'role': AppConstants.employerRole,
       };
 
@@ -206,32 +146,17 @@ class AuthService {
 
       return EmployerModel.fromJson(response);
     } on PostgrestException catch (e) {
-<<<<<<< HEAD
-      throw DatabaseException(e.message);
-=======
       if (e.code == '23505') {
         throw DatabaseException('Profile already exists for this user');
       }
       throw DatabaseException('Database error: ${e.message}');
     } on AuthException {
       rethrow;
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
     } catch (e) {
       throw DatabaseException('Failed to create employer profile: $e');
     }
   }
 
-<<<<<<< HEAD
-  // Get user role
-  Future<String?> getUserRole() async {
-    try {
-      final user = currentUser;
-      if (user == null) throw Exception('No user found');
-
-      final jobSeekerResponse = await _client
-          .from(AppConstants.jobSeekerTable)
-          .select()
-=======
   // Get user role with better error handling
   Future<String?> getUserRole() async {
     try {
@@ -242,7 +167,6 @@ class AuthService {
       final jobSeekerResponse = await _client
           .from(AppConstants.jobSeekerTable)
           .select('role')
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
           .eq('auth_user_id', user.id)
           .maybeSingle();
 
@@ -250,16 +174,10 @@ class AuthService {
         return jobSeekerResponse['role'] as String;
       }
 
-<<<<<<< HEAD
-      final employerResponse = await _client
-          .from(AppConstants.employerTable)
-          .select()
-=======
       // Check employer
       final employerResponse = await _client
           .from(AppConstants.employerTable)
           .select('role')
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
           .eq('auth_user_id', user.id)
           .maybeSingle();
 
@@ -268,32 +186,20 @@ class AuthService {
       }
 
       return null;
-<<<<<<< HEAD
-    } catch (e) {
-=======
     } on PostgrestException catch (e) {
       print('Database error getting user role: ${e.message}');
       return null;
     } catch (e) {
       print('Error getting user role: $e');
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       return null;
     }
   }
 
-<<<<<<< HEAD
-  // Get job seeker profile
-  Future<JobSeekerModel?> getJobSeekerProfile() async {
-    try {
-      final user= currentUser;
-      if (user == null) throw Exception('No user found');
-=======
   // Get job seeker profile with better error handling
   Future<JobSeekerModel?> getJobSeekerProfile() async {
     try {
       final user = currentUser;
       if (user == null) return null;
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 
       final response = await _client
           .from(AppConstants.jobSeekerTable)
@@ -303,32 +209,20 @@ class AuthService {
 
       if (response == null) return null;
       return JobSeekerModel.fromJson(response);
-<<<<<<< HEAD
-    } catch (e) {
-=======
     } on PostgrestException catch (e) {
       print('Database error getting job seeker profile: ${e.message}');
       return null;
     } catch (e) {
       print('Error getting job seeker profile: $e');
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       return null;
     }
   }
 
-<<<<<<< HEAD
-  //Get employer profile
-  Future<EmployerModel?> getEmployerProfile() async {
-    try {
-      final user = currentUser;
-      if (user == null) throw Exception('No user found');
-=======
   // Get employer profile with better error handling
   Future<EmployerModel?> getEmployerProfile() async {
     try {
       final user = currentUser;
       if (user == null) return null;
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
 
       final response = await _client
           .from(AppConstants.employerTable)
@@ -338,19 +232,6 @@ class AuthService {
 
       if (response == null) return null;
       return EmployerModel.fromJson(response);
-<<<<<<< HEAD
-    } catch (e) {
-      return null;
-    }
-  } 
-
-  // Logout
-  Future<void> signOut() async {
-    try {
-      await _auth.signOut();
-    } catch (e) {
-      throw AuthException('Failed to sign out');
-=======
     } on PostgrestException catch (e) {
       print('Database error getting employer profile: ${e.message}');
       return null;
@@ -368,7 +249,6 @@ class AuthService {
       throw AuthException('Failed to sign out: ${e.message}');
     } catch (e) {
       throw AuthException('Failed to sign out: ${e.toString()}');
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
     }
   }
 
@@ -377,10 +257,6 @@ class AuthService {
 
   // Check if user has completed profile
   Future<bool> hasCompletedProfile() async {
-<<<<<<< HEAD
-    final role = await getUserRole();
-    return role != null;
-=======
     try {
       final role = await getUserRole();
       return role != null;
@@ -400,6 +276,5 @@ class AuthService {
     }
     
     return null;
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   }
 }
