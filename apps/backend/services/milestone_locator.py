@@ -248,8 +248,8 @@ def _mk_prompt(seeker: Dict[str, Any], milestones: List[Dict[str, Any]]) -> str:
     }
 
     return (
-        "You are an expert career assessor. OUTPUT STRICT JSON ONLY (no markdown, no commentary).\n"
-        "When choosing a Milestone, make sure to take into account every single aspect as well as go beyond surface-level analysis\n"
+        "You are an expert career assessor in the Philippines. OUTPUT STRICT JSON ONLY (no markdown, no commentary).\n"
+        "When choosing a Milestone, make sure to take into account every single aspect as well as go beyond surface-level analysis and take into account the Philippine job economy\n"
         "Make sure to review all milestones before choosing the appropriate one\n"
         "Compare ONLY the job seeker's: skills, licenses & certifications, experience, education. However, make sure to go beyond surface level analysis and compare possible relational relevance in each metric.\n"
         "to each milestone's KNOWLEDGE TEXT.\n"

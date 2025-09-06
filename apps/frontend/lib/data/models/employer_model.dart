@@ -7,15 +7,9 @@ class EmployerModel {
   final String? companyEmail;
   final String? companyPosition;
   final String? companyPhoneNumber;
-<<<<<<< HEAD
-  final String? dtiOrSecRegistration;
-  final String? barangayClearance;
-  final String? businessPermit;
-=======
   final String? dtiOrSecRegistration; 
   final String? barangayClearance; 
   final String? businessPermit; 
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -43,11 +37,7 @@ class EmployerModel {
       name: json['name'] as String?,
       company: json['company'] as String?,
       companyEmail: json['company_email'] as String?,
-<<<<<<< HEAD
-      companyPosition: json['company_position'] as String?,
-=======
       companyPosition: json['company_position'] as String?, 
->>>>>>> c5845bf80c9c99d8aa5f407f219f5f5dea90cebe
       companyPhoneNumber: json['company_phone_number'] as String?,
       dtiOrSecRegistration: json['dti_or_sec_registration'] as String?,
       barangayClearance: json['barangay_clearance'] as String?,

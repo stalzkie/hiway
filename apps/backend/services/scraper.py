@@ -339,8 +339,8 @@ def _select_provider(provider: str, gemini_api_key: str, openai_api_key: str) ->
 
 def _compose_roadmap_prompt(role: str, max_milestones: int) -> str:
     return (
-        "You are designing an upskilling roadmap for a job seeker.\n"
-        "TASK: Given the target ROLE, propose leveled knowledge milestones (Basic → Advanced) AND, for each milestone,\n"
+        "You are designing an upskilling roadmap for a job seeker focused on the Philippines.\n"
+        "TASK: Given the target ROLE, propose leveled knowledge milestones (Basic → Advanced) AND, for each milestone, make sure this roadmap is centered around the job economy of the Philippines\n"
         "list EXACTLY 3 specific certificates/licenses that validate skills for that milestone.\n"
         "STRICT RULES:\n"
         "• Certificates must be SPECIFIC credential names with EXACT titles as they appear on official sites.\n"
