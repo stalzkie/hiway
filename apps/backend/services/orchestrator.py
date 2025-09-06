@@ -9,20 +9,22 @@ from supabase import create_client
 from .matcher import match_and_enrich, get_seeker_id_by_email
 from .scraper import generate_and_store_roadmap
 from .data_storer import persist_matcher_results
-from .milestone_locator import locate_milestone_with_vectors  # <-- NEW
+from .milestone_locator import locate_milestone_with_llm  # <-- LLM-only
 
 # ---------------- Supabase client ----------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # ---------------- Helpers ----------------
 def _fetch_job_seeker(job_seeker_id: str) -> Optional[Dict[str, Any]]:
     """
-    Fetch seeker; tolerate singular/plural table naming.
+    Fetch seeker; tolerate singular/plural table naming if needed.
     """
-    for tbl in ("job_seeker", "job_seeker"):
+    for tbl in ("job_seeker", "job_seeker"):  # kept as-is for your current schema
         resp = (
             sb.table(tbl)
             .select("*")
@@ -108,7 +110,7 @@ def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool 
       1) Resolve job_seeker by email.
       2) Update matches if needed.
       3) Ensure a roadmap exists for the role (create if needed).
-      4) Run vector-based milestone locator (idempotent: recomputes only if needed).
+      4) Run LLM-based milestone locator (idempotent: recomputes only if needed).
       5) Return the roadmap document + current milestone status (always).
     """
     job_seeker_id = get_seeker_id_by_email(email)
@@ -127,7 +129,7 @@ def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool 
     last_status = _fetch_latest_status_for_role(job_seeker_id, target_role)
 
     needs_match_update = force or _profile_changed(seeker_row, last_match)
-    # If no status exists, or profile changed since last status, or force: we need roadmap &/or relayout
+    # If no status exists, or profile changed since last status, or force: we need roadmap &/or relocation
     needs_roadmap_or_locate = force or (last_status is None) or _profile_changed(seeker_row, last_status)
 
     # -------- 2) Matcher update (job posts confidence snapshots) --------
@@ -173,9 +175,9 @@ def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool 
     if roadmap_doc is None and roadmap_id:
         roadmap_doc = _fetch_roadmap_doc_by_id(roadmap_id)
 
-    # -------- 4) Locate current milestone (vector service; idempotent) --------
+    # -------- 4) Locate current milestone (LLM service; idempotent) --------
     # Even on cached runs, calling this is cheap: it will re-use the latest snapshot unless needed.
-    milestone_status = locate_milestone_with_vectors(
+    milestone_status = locate_milestone_with_llm(
         job_seeker_id=job_seeker_id,
         role=target_role,
         roadmap_id=roadmap_id,

@@ -60,3 +60,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android Gradle files
+**/android/.gradle/
+**/android/local.properties
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Flutter build directories
+**/build/
+apps/frontend/build/
+apps/backend/build/

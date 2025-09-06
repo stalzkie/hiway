@@ -4,7 +4,7 @@ import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/pages/auth/login_page.dart';
 import 'package:hiway_app/pages/employer/dashboard.dart';
 import 'package:hiway_app/pages/home/home_page.dart';
-import 'package:hiway_app/pages/job-seeker/dashboard.dart';
+import 'package:hiway_app/pages/job_seeker/dashboard.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

@@ -4,11 +4,12 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/pages/auth/auth_wrapper.dart';
+
 import 'package:hiway_app/pages/auth/login_page.dart';
 import 'package:hiway_app/pages/auth/signup_page.dart';
 import 'package:hiway_app/pages/employer/dashboard.dart';
 import 'package:hiway_app/pages/home/home_page.dart';
-import 'package:hiway_app/pages/job-seeker/dashboard.dart';
+import 'package:hiway_app/pages/job_seeker/dashboard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
