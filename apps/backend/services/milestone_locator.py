@@ -1,101 +1,47 @@
-# apps/backend/services/milestone_locator_vector.py
+# apps/backend/services/milestone_locator.py
 from __future__ import annotations
 
 import os
-import time
-from typing import Any, Dict, List, Optional, Tuple, Iterable
+import json
+import math
+from typing import Any, Dict, List, Optional, Tuple
 
 from supabase import create_client, Client
-from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
-import numpy as np
-
 from apps.backend.services.data_storer import (
-    _now_iso,
-    _json_stable,  # optional; helpful for deterministic ids
     store_seeker_milestone_status,
+    _now_iso,
 )
 
-# ---------------------- Config ----------------------
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+# --------------------------- Supabase client ---------------------------
+_SUPABASE_URL = os.getenv("SUPABASE_URL")
+_SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+if not _SUPABASE_URL or not _SUPABASE_KEY:
     raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
 
-_sb: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+_sb: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
 
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX  = os.getenv("PINECONE_INDEX", "hiway-milestones")  # dedicated index for milestones
-PINECONE_REGION = os.getenv("PINECONE_REGION")  # optional; depends on your Pinecone setup
+# --------------------------- Scoring params ---------------------------
+PASS_GATE = float(os.getenv("MILESTONE_PASS_GATE", 0.60))
+GAP_MIN = int(os.getenv("MILESTONE_GAP_MIN", 3))  # min gaps when score < 60%
 
-EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-MODEL = SentenceTransformer(EMBED_MODEL_NAME)
-
-# weights / gates (align to your previous logic; tweak via env if needed)
-PASS_GATE = float(os.getenv("MILESTONE_PASS_GATE", 0.60))          # 0..1
-SKILL_WEIGHT = float(os.getenv("MILESTONE_SKILL_WEIGHT", 0.70))    # part of overall score
-OUTCOME_WEIGHT = float(os.getenv("MILESTONE_OUTCOME_WEIGHT", 0.30))
-GAP_THRESHOLD = float(os.getenv("MILESTONE_GAP_THRESHOLD", 0.50))  # 0..1
-TOPK = int(os.getenv("MILESTONE_TOPK", "5"))                       # neighbors to consider per item
-
-# level bands
-LEVEL_BANDS = [
+LEVEL_BANDS: List[Tuple[str, float, float]] = [
     ("Beginner", 0.0, 0.40),
     ("Intermediate", 0.40, 0.70),
     ("Advanced", 0.70, 1.01),
 ]
 
-# ---------------------- Pinecone helpers ----------------------
-def _pc_client() -> Pinecone:
-    if not PINECONE_API_KEY:
-        raise RuntimeError("PINECONE_API_KEY must be set")
-    return Pinecone(api_key=PINECONE_API_KEY)
-
-def _pc_index(pc: Pinecone):
-    # assumes index already exists with correct dimension
-    return pc.Index(PINECONE_INDEX)
-
-def _namespace_for_roadmap(roadmap_id: str) -> str:
-    # isolate vectors per roadmap
-    return f"roadmap:{roadmap_id}"
-
-def _ensure_index_ready(expected_dim: int):
-    """
-    You should create the Pinecone index out-of-band once:
-    dimension must match the embedding model (e.g., 384 for MiniLM-L6-v2).
-    Example CLI/SDK creation:
-      pc.create_index(name=PINECONE_INDEX, dimension=384, metric="cosine")
-    """
-    pc = _pc_client()
-    desc = pc.describe_index(PINECONE_INDEX)
-    if int(desc.dimension) != expected_dim:
-        raise RuntimeError(
-            f"Pinecone index dim={desc.dimension} != expected model dim={expected_dim}"
-        )
-
-# ---------------------- Embeddings ----------------------
-def _embed(texts: List[str]) -> np.ndarray:
-    if not texts:
-        return np.zeros((0, MODEL.get_sentence_embedding_dimension()), dtype=np.float32)
-    vecs = MODEL.encode(texts, normalize_embeddings=True)
-    return np.asarray(vecs, dtype=np.float32)
-
-def _cos(a: np.ndarray, b: np.ndarray) -> float:
-    # both are L2-normalized → dot == cosine
-    return float(np.dot(a, b))
-
+# --------------------------- Helpers ---------------------------
 def _band_for(score01: float) -> str:
     for name, lo, hi in LEVEL_BANDS:
         if lo <= score01 < hi:
             return name
     return "Beginner"
 
-# ---------------------- Data I/O ----------------------
 def _fetch_roadmap(roadmap_id: Optional[str], job_seeker_id: str, role: str) -> Dict[str, Any]:
     if roadmap_id:
         r = (
             _sb.table("role_roadmaps")
-            .select("roadmap_id, milestones")
+            .select("roadmap_id, job_seeker_id, role, milestones, created_at")
             .eq("roadmap_id", roadmap_id)
             .limit(1)
             .execute()
@@ -103,7 +49,7 @@ def _fetch_roadmap(roadmap_id: Optional[str], job_seeker_id: str, role: str) -> 
     else:
         r = (
             _sb.table("role_roadmaps")
-            .select("roadmap_id, milestones")
+            .select("roadmap_id, job_seeker_id, role, milestones, created_at")
             .eq("job_seeker_id", job_seeker_id)
             .eq("role", role)
             .order("created_at", desc=True)
@@ -125,6 +71,9 @@ def _fetch_seeker_profile(job_seeker_id: str) -> Tuple[Dict[str, Any], Optional[
     )
     seeker = (sres.data or [{}])[0]
     updated_at = seeker.get("updated_at")
+    # Ensure arrays exist
+    for k in ("skills", "experience", "education", "licenses_certifications"):
+        seeker[k] = seeker.get(k) or []
     return seeker, updated_at
 
 def _fetch_latest_snapshot_time(job_seeker_id: str, role: str, roadmap_id: str) -> Optional[str]:
@@ -141,158 +90,315 @@ def _fetch_latest_snapshot_time(job_seeker_id: str, role: str, roadmap_id: str) 
     row = (res.data or [None])[0]
     return row["calculated_at"] if row else None
 
-# ---------------------- Indexing milestones ----------------------
-def _milestone_items(m: Dict[str, Any]) -> Tuple[List[str], List[str]]:
-    # normalize skills/outcomes to strings
-    req_skills = [str(x) for x in (m.get("skills") or []) if str(x).strip()]
-    outcomes   = [str(x) for x in (m.get("outcomes") or []) if str(x).strip()]
-    return req_skills, outcomes
+# --------------------------- String/Vector utils ---------------------------
+def _to_text(x: Any) -> str:
+    if isinstance(x, str):
+        return x
+    if isinstance(x, dict):
+        try:
+            return " ".join(str(v) for v in x.values() if v is not None)
+        except Exception:
+            return str(x)
+    if isinstance(x, (list, tuple, set)):
+        try:
+            return " ".join(_to_text(v) for v in x)
+        except Exception:
+            return str(x)
+    return str(x)
 
-def _ensure_milestones_indexed(roadmap_id: str, milestones: List[Dict[str, Any]]):
+def _norm(s: Any) -> str:
+    t = _to_text(s)
+    return t.strip().lower()
+
+def _flatten_user_knowledge(seeker: Dict[str, Any]) -> List[str]:
     """
-    Upserts milestone requirement vectors into Pinecone (namespace per roadmap).
-    Vector schema:
-      id: f"{milestone_index}:{kind}:{i}"  (kind in {"skill","outcome"})
-      metadata: { "milestone_index": int, "kind": "skill|outcome", "text": str }
+    Flatten *only* these sources into canonical tokens:
+    - skills
+    - experience
+    - education
+    - licenses_certifications
     """
-    _ensure_index_ready(MODEL.get_sentence_embedding_dimension())
-    pc = _pc_client()
-    index = _pc_index(pc)
-    namespace = _namespace_for_roadmap(roadmap_id)
+    parts: List[str] = []
+    for k in ("skills", "experience", "education", "licenses_certifications"):
+        parts.extend([_to_text(x) for x in (seeker.get(k) or [])])
 
-    # Build payloads
-    vecs: List[Tuple[str, List[float], Dict[str, Any]]] = []
-    for mi, m in enumerate(milestones):
-        s, o = _milestone_items(m)
-        if s:
-            s_emb = _embed(s)
-            for i in range(len(s)):
-                vecs.append((
-                    f"{mi}:skill:{i}",
-                    s_emb[i].tolist(),
-                    {"milestone_index": mi, "kind": "skill", "text": s[i]},
-                ))
-        if o:
-            o_emb = _embed(o)
-            for i in range(len(o)):
-                vecs.append((
-                    f"{mi}:outcome:{i}",
-                    o_emb[i].tolist(),
-                    {"milestone_index": mi, "kind": "outcome", "text": o[i]},
-                ))
+    # split comma-separated strings
+    split_parts: List[str] = []
+    for p in parts:
+        if "," in p:
+            split_parts.extend([_to_text(x) for x in p.split(",")])
+        else:
+            split_parts.append(p)
 
-    # Upsert in chunks
-    BATCH = 200
-    for k in range(0, len(vecs), BATCH):
-        batch = vecs[k:k+BATCH]
-        index.upsert(vectors=[{"id": vid, "values": vals, "metadata": meta} for vid, vals, meta in batch],
-                     namespace=namespace)
+    # dedupe + clean
+    seen = set()
+    out: List[str] = []
+    for s in split_parts:
+        ns = _norm(s)
+        if ns and ns not in seen:
+            seen.add(ns)
+            out.append(ns)
+    return out
 
-# ---------------------- Scoring with Pinecone ----------------------
-def _score_milestones_with_pinecone(
-    roadmap_id: str,
-    milestones: List[Dict[str, Any]],
-    seeker_strings: List[str],
-) -> Tuple[List[Dict[str, Any]], int]:
+def _cosine_from_sets(a_items: List[str], b_items: List[str]) -> float:
     """
-    For each required item per milestone, we query nearest neighbors from Pinecone
-    and compute similarity coverage based on matches mapped back to the same milestone.
-    Returns (milestones_scored, current_idx).
+    Binary cosine similarity between two lists of canonical strings.
     """
-    if not milestones:
-        return [], 0
+    a_set = set([_norm(x) for x in a_items if x])
+    b_set = set([_norm(x) for x in b_items if x])
+    if not a_set or not b_set:
+        return 0.0
+    inter = len(a_set & b_set)
+    denom = math.sqrt(len(a_set)) * math.sqrt(len(b_set))
+    return float(inter) / float(denom) if denom else 0.0
 
-    # Embed seeker profile items
-    seeker_items = [s for s in seeker_strings if s.strip()]
-    if not seeker_items:
-        # no data; everything scores zero
-        scored = []
-        for i, m in enumerate(milestones):
-            scored.append({
+def _clamp01(x: float) -> float:
+    try:
+        xf = float(x)
+    except Exception:
+        return 0.0
+    return 0.0 if xf < 0 else (1.0 if xf > 1.0 else xf)
+
+def _avg(vals: List[float]) -> float:
+    return sum(vals) / len(vals) if vals else 0.0
+
+# --------------------------- Milestone knowledge extraction ---------------------------
+def _milestone_knowledge_text(ms: Dict[str, Any]) -> str:
+    """
+    Prefer explicit knowledge/content fields if present; otherwise
+    build a knowledge blob from skills/outcomes/certs/title.
+    """
+    blobs: List[str] = []
+    for k in ("knowledge", "content", "body", "description"):
+        if ms.get(k):
+            blobs.append(_to_text(ms.get(k)))
+
+    # fallbacks / enrichers
+    for k in ("skills", "outcomes", "cert_names"):
+        if ms.get(k):
+            blobs.append(_to_text(ms.get(k)))
+
+    if ms.get("title") or ms.get("milestone"):
+        blobs.append(str(ms.get("title") or ms.get("milestone")))
+
+    return _to_text(blobs)
+
+def _milestone_keywords(ms: Dict[str, Any]) -> List[str]:
+    """
+    Keywords used for cosine backstop. Use any structured lists if present.
+    """
+    keys: List[str] = []
+    for k in ("knowledge_keywords", "skills", "outcomes", "cert_names"):
+        if ms.get(k):
+            vals = ms.get(k)
+            if isinstance(vals, list):
+                keys.extend([_to_text(x) for x in vals])
+            else:
+                keys.append(_to_text(vals))
+    # de-dupe normalized
+    seen = set()
+    out: List[str] = []
+    for s in keys:
+        ns = _norm(s)
+        if ns and ns not in seen:
+            seen.add(ns)
+            out.append(ns)
+    return out
+
+# --------------------------- LLM prompt & call ---------------------------
+def _mk_prompt(seeker: Dict[str, Any], milestones: List[Dict[str, Any]]) -> str:
+    """
+    Constrained JSON-only prompt. Compares ONLY these job_seeker fields:
+      - skills
+      - licenses_certifications
+      - experience
+      - education
+    Against the *knowledge content* of each milestone.
+
+    Critical rule:
+    • When scoring milestone at index i, ASSUME milestones [0..i-1] are already achieved by the seeker.
+      Evaluate only the incremental knowledge expected at milestone i, not what earlier milestones cover.
+    """
+    flat = _flatten_user_knowledge(seeker)
+
+    payload = {
+        "user_profile": {
+            "skills": seeker.get("skills") or [],
+            "experience": seeker.get("experience") or [],
+            "education": seeker.get("education") or [],
+            "licenses_certifications": seeker.get("licenses_certifications") or [],
+            "flat_user_knowledge": flat,
+        },
+        "milestones": [
+            {
                 "index": i,
-                "title": m.get("title"),
-                "target_level": m.get("target_level"),
-                "score_pct": 0.0,
-                "skills_scored": [],
-                "outcomes_scored": [],
-                "gaps": (m.get("skills") or []) + (m.get("outcomes") or []),
-            })
-        return scored, 0
+                "title": m.get("title") or m.get("milestone"),
+                "knowledge_text": _milestone_knowledge_text(m),
+                "prior_titles": [
+                    (milestones[j].get("title") or milestones[j].get("milestone"))
+                    for j in range(0, i)
+                ],
+            }
+            for i, m in enumerate(milestones or [])
+        ],
+        "rubric": {
+            "gap_threshold": 0.5,
+            "gap_min_when_score_below": {"threshold_pct": 60, "min_gaps": GAP_MIN},
+        },
+    }
 
-    seeker_emb = _embed(seeker_items)
+    return (
+        "You are an expert career assessor. OUTPUT STRICT JSON ONLY (no markdown, no commentary).\n"
+        "Compare ONLY the job seeker's: skills, licenses & certifications, experience, education\n"
+        "to each milestone's KNOWLEDGE TEXT.\n"
+        "Assume that for milestone i, ALL prior milestones [0..i-1] are already achieved by the seeker.\n"
+        "Evaluate only the additional/next knowledge expected at milestone i.\n"
+        "For each milestone, produce:\n"
+        "  - score_pct (0..100)\n"
+        "  - matched_evidence: array of {\"item\",\"source\"} where source in {\"skills\",\"experience\",\"education\",\"licenses\"}\n"
+        "  - gaps: array of \"items\" representing missing knowledge for that milestone (post-assumption)\n"
+        "  - rationale: 1–2 sentences explaining the score in light of the assumption\n"
+        f"IMPORTANT: If score_pct < 60, include at least {GAP_MIN} gap items.\n"
+        "Return JSON with exactly these top-level keys: milestones_scored.\n\n"
+        f"{json.dumps(payload, ensure_ascii=False)}"
+    )
 
-    # Query Pinecone for each seeker item, accumulate best matches by milestone
-    pc = _pc_client()
-    index = _pc_index(pc)
-    namespace = _namespace_for_roadmap(roadmap_id)
+def _select_provider() -> str:
+    provider = (os.getenv("LLM_PROVIDER") or "auto").lower()
+    if provider == "auto":
+        if os.getenv("GEMINI_API_KEY"):
+            return "gemini"
+        elif os.getenv("OPENAI_API_KEY"):
+            return "openai"
+        else:
+            raise RuntimeError("No LLM API key found. Set GEMINI_API_KEY or OPENAI_API_KEY.")
+    return provider
 
-    # Keep best similarity per (milestone, required_text)
-    # We will invert: for each required item, find best similarity among seeker items using topK of seeker->index.
-    # Build a map: required_text -> (milestone_index, kind)
-    required_map: Dict[str, Tuple[int, str]] = {}
-    for mi, m in enumerate(milestones):
-        skills, outcomes = _milestone_items(m)
-        for t in skills:
-            required_map[t] = (mi, "skill")
-        for t in outcomes:
-            required_map[t] = (mi, "outcome")
-
-    # Accumulator for per-required item best sim
-    best_sim: Dict[Tuple[int, str, str], float] = {}  # key=(mi, kind, text)
-
-    for vec in seeker_emb:
-        q = index.query(
-            vector=vec.tolist(),
-            top_k=TOPK,
-            include_metadata=True,
-            namespace=namespace
+def _call_llm(prompt: str) -> Dict[str, Any]:
+    provider = _select_provider()
+    if provider == "openai":
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        resp = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            response_format={"type": "json_object"},
         )
-        for match in (q.matches or []):
-            meta = match.metadata or {}
-            mi = int(meta.get("milestone_index", 0))
-            kind = meta.get("kind", "skill")
-            text = str(meta.get("text", ""))
-            sim = float(match.score)  # cosine since normalized
+        content = resp.choices[0].message.content or "{}"
+        return json.loads(content)
+    elif provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-pro"))
+        resp = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.1,
+                "response_mime_type": "application/json",
+            },
+        )
+        text = resp.text or "{}"
+        try:
+            return json.loads(text)
+        except Exception:
+            first = text.find("{")
+            last = text.rfind("}")
+            if first >= 0 and last >= 0 and last > first:
+                return json.loads(text[first:last+1])
+            raise
+    else:
+        raise RuntimeError(f"Unsupported LLM_PROVIDER: {provider}")
 
-            key = (mi, kind, text)
-            if key not in best_sim or sim > best_sim[key]:
-                best_sim[key] = sim
+# --------------------------- Normalization helpers ---------------------------
+def _to_list(val: Any) -> List[Any]:
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, dict):
+        return [val]
+    return [val]
 
-    # Aggregate per milestone
-    milestones_scored: List[Dict[str, Any]] = []
-    best_gate_idx: Optional[int] = None
+def _coerce_item(obj: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(obj, dict):
+        item = obj.get("item")
+        source = obj.get("source")
+        if item is None:
+            return None
+        return {"item": str(item), "source": str(source) if source else None}
+    if isinstance(obj, str):
+        return {"item": obj, "source": None}
+    return None
 
-    for mi, m in enumerate(milestones):
-        skills, outcomes = _milestone_items(m)
+def _normalize_matched(val: Any) -> List[Dict[str, Any]]:
+    items = _to_list(val)
+    out: List[Dict[str, Any]] = []
+    for elem in items:
+        coerced = _coerce_item(elem)
+        if coerced:
+            out.append(coerced)
+    return out
 
-        skills_pairs = [(t, round(best_sim.get((mi, "skill", t), 0.0), 4)) for t in skills]
-        outs_pairs   = [(t, round(best_sim.get((mi, "outcome", t), 0.0), 4)) for t in outcomes]
+def _normalize_gaps(val: Any) -> List[Dict[str, Any]]:
+    items = _to_list(val)
+    out: List[Dict[str, Any]] = []
+    for elem in items:
+        if isinstance(elem, dict):
+            it = elem.get("item") or elem.get("name") or elem.get("topic")
+            if it:
+                out.append({"item": str(it)})
+        elif isinstance(elem, str):
+            out.append({"item": elem})
+    return out
 
-        skills_avg = sum(s for _, s in skills_pairs) / max(1, len(skills_pairs))
-        outs_avg   = sum(s for _, s in outs_pairs) / max(1, len(outs_pairs))
-        score01    = (SKILL_WEIGHT * skills_avg) + (OUTCOME_WEIGHT * outs_avg)
-        score_pct  = round(score01 * 100.0, 2)
+def _ensure_gap_min(row: Dict[str, Any], ms_keywords: List[str]) -> None:
+    try:
+        score = float(row.get("score_pct", 0.0))
+    except Exception:
+        score = 0.0
+    gaps = _normalize_gaps(row.get("gaps"))
 
-        gaps = [t for t, s in (skills_pairs + outs_pairs) if s < GAP_THRESHOLD]
+    if score < 60.0 and len(gaps) < GAP_MIN:
+        # backfill from milestone keywords not already listed
+        already = set(_norm(g.get("item")) for g in gaps)
+        for kw in ms_keywords:
+            if _norm(kw) not in already:
+                gaps.append({"item": kw})
+                already.add(_norm(kw))
+                if len(gaps) >= GAP_MIN:
+                    break
 
-        milestones_scored.append({
-            "index": mi,
-            "title": m.get("title"),
-            "target_level": m.get("target_level"),
-            "score_pct": score_pct,
-            "skills_scored": [{"item": t, "sim": round(s, 2)} for t, s in skills_pairs],
-            "outcomes_scored": [{"item": t, "sim": round(s, 2)} for t, s in outs_pairs],
-            "gaps": gaps,
-        })
+    row["gaps"] = gaps
 
-        if score01 >= PASS_GATE:
-            best_gate_idx = mi
+# --------------------------- Finalization & selection ---------------------------
+def _finalize_scored(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for idx, row in enumerate(scored or []):
+        try:
+            sp = float(row.get("score_pct", 0.0))
+        except Exception:
+            sp = 0.0
+        row["score_pct"] = round(sp, 2)
+        row["index"] = int(row.get("index", idx))
+        row["title"] = row.get("title") or ""
+        row["rationale"] = row.get("rationale") or ""
+        row["matched_evidence"] = _normalize_matched(row.get("matched_evidence"))
+        row["gaps"] = _normalize_gaps(row.get("gaps"))
+        out.append(row)
+    out.sort(key=lambda r: r.get("index", 0))
+    return out
 
-    current_idx = best_gate_idx if best_gate_idx is not None else 0
-    return milestones_scored, current_idx
+def _pick_current_next(scored: List[Dict[str, Any]]) -> Tuple[int, int]:
+    current_idx = 0
+    for r in scored:
+        if (r.get("score_pct", 0.0) / 100.0) >= PASS_GATE:
+            current_idx = r["index"]
+    next_idx = min(current_idx + 1, max(0, len(scored) - 1))
+    return current_idx, next_idx
 
-# ---------------------- Public entrypoint ----------------------
-def locate_milestone_with_vectors(
+# --------------------------- Public entrypoint ---------------------------
+def locate_milestone_with_llm(
     *,
     job_seeker_id: str,
     role: str,
@@ -301,27 +407,22 @@ def locate_milestone_with_vectors(
     model_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Determines current/next milestone for a seeker using Pinecone+SBERT.
-    Writes a snapshot to seeker_milestone_status, but only if:
-      - force=True, or
-      - no existing snapshot, or
-      - seeker.updated_at > last_snapshot.calculated_at
-    Returns the snapshot row that was written (or the latest existing snapshot if no changes).
+    LLM-based evaluation:
+      • Compares ONLY seeker skills/experience/education/licenses to the milestone's knowledge content.
+      • For milestone i, LLM ASSUMES milestones [0..i-1] are already achieved (cumulative progression).
     """
     road = _fetch_roadmap(roadmap_id, job_seeker_id, role)
     roadmap_id = road["roadmap_id"]
-    milestones: List[Dict[str, Any]] = road.get("milestones") or []
+    milestones: List[Dict[str, Any]] = list(road.get("milestones") or [])
 
     seeker, seeker_updated_at = _fetch_seeker_profile(job_seeker_id)
     latest_calc = _fetch_latest_snapshot_time(job_seeker_id, role, roadmap_id)
 
-    # decide if we should recompute
     should_compute = force or (latest_calc is None) or (
         seeker_updated_at and latest_calc and str(seeker_updated_at) > str(latest_calc)
     )
 
     if not should_compute:
-        # return the latest existing snapshot
         res = (
             _sb.table("seeker_milestone_status")
             .select("*")
@@ -334,28 +435,53 @@ def locate_milestone_with_vectors(
         )
         return (res.data or [None])[0]
 
-    # ensure milestone vectors are in Pinecone
-    _ensure_milestones_indexed(roadmap_id, milestones)
+    # -------- LLM call (assume prior milestones achieved for each row) --------
+    prompt = _mk_prompt(seeker, milestones)
+    raw = _call_llm(prompt)
 
-    # flatten seeker strings (skills + experience + education + certs)
-    seeker_items: List[str] = []
-    for key in ("skills", "experience", "education", "licenses_certifications"):
-        arr = seeker.get(key) or []
-        seeker_items.extend([str(x).strip() for x in arr if str(x).strip()])
+    # Normalize & finalize
+    milestones_scored = _finalize_scored(raw.get("milestones_scored") or [])
 
-    milestones_scored, current_idx = _score_milestones_with_pinecone(
-        roadmap_id=roadmap_id,
-        milestones=milestones,
-        seeker_strings=seeker_items,
-    )
+    # Hybrid backstop: light cosine against milestone keywords (defensive)
+    flat_user = _flatten_user_knowledge(seeker)
+    for row in milestones_scored:
+        idx = row.get("index", 0)
+        ms = milestones[idx] if 0 <= idx < len(milestones) else {}
+        ms_title = ms.get("title") or ms.get("milestone") or f"Milestone {idx}"
+        ms_keys = _milestone_keywords(ms)
 
+        # cosine backstop (0..1) -> pct
+        cos_sim = _cosine_from_sets(flat_user, ms_keys) if ms_keys else 0.0
+        cos_pct = 100.0 * cos_sim
+
+        # take the protective maximum of LLM score and cosine backstop
+        try:
+            llm_pct = float(row.get("score_pct", 0.0))
+        except Exception:
+            llm_pct = 0.0
+
+        row["score_pct"] = round(max(llm_pct, cos_pct), 2)
+        row["title"] = ms_title
+
+        # enforce min gaps when score low
+        _ensure_gap_min(row, ms_keys)
+
+    # Decide current/next
+    current_idx, next_idx = _pick_current_next(milestones_scored)
     current = milestones_scored[current_idx] if milestones_scored else None
-    next_idx = min(current_idx + 1, max(0, len(milestones_scored) - 1))
-    next_m  = milestones_scored[next_idx] if milestones_scored else None
+    next_m = milestones_scored[next_idx] if milestones_scored else None
 
-    current_score01 = (current["score_pct"] / 100.0) if current else 0.0
-    current_level = _band_for(current_score01)
-    next_level = _band_for((next_m["score_pct"] / 100.0) if next_m else 0.0)
+    current01 = (current["score_pct"] / 100.0) if current else 0.0
+    next01 = (next_m["score_pct"] / 100.0) if next_m else 0.0
+
+    current_level = _band_for(current01)
+    next_level = _band_for(next01)
+
+    weights_meta = {
+        "engine": "llm(assume-prior-achieved)+cosine-backstop",
+        "pass_gate": PASS_GATE,
+        "gap_min": GAP_MIN,
+    }
 
     snapshot = store_seeker_milestone_status(
         job_seeker_id=job_seeker_id,
@@ -364,22 +490,14 @@ def locate_milestone_with_vectors(
         auth_user_id=None,
         current_milestone=current.get("title") if current else None,
         current_level=current_level,
-        current_score_pct=current.get("score_pct") if current else None,
+        current_score_pct=current.get("score_pct") if current else 0.0,
         next_milestone=next_m.get("title") if next_m else None,
         next_level=next_level,
         gaps=current.get("gaps") if current else [],
         milestones_scored=milestones_scored,
-        weights={
-            "skills": SKILL_WEIGHT,
-            "outcomes": OUTCOME_WEIGHT,
-            "pass_gate": PASS_GATE,
-            "gap_threshold": GAP_THRESHOLD,
-            "topk": TOPK,
-            "engine": "sbert+pcone",
-            "embed_model": EMBED_MODEL_NAME,
-        },
-        model_version=model_version,
-        low_confidence=(current_score01 < PASS_GATE),
+        weights=weights_meta,
+        model_version=model_version or "llm-assume-prior-achieved-v1",
+        low_confidence=(current01 < PASS_GATE),
         calculated_at_iso=_now_iso(),
     )
     return snapshot
