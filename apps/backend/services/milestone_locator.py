@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import json
 import math
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from supabase import create_client, Client
@@ -205,6 +206,76 @@ def _milestone_keywords(ms: Dict[str, Any]) -> List[str]:
             out.append(ns)
     return out
 
+# --------------------------- ETA parsing & heuristics ---------------------------
+def _parse_eta_hours(obj: Any) -> Tuple[Optional[float], Optional[str], Optional[float]]:
+    """
+    Accepts shapes like:
+      {"hours": 25, "text": "about 3–4 days of focused study", "confidence": 0.7}
+      {"estimate_hours": 12.5, "estimate_text": "...", "confidence": 0.6}
+      "~2 weeks"  -> parse to hours
+    Returns (hours, text, confidence)
+    """
+    if obj is None:
+        return None, None, None
+
+    if isinstance(obj, (int, float)):
+        return float(obj), None, None
+
+    if isinstance(obj, str):
+        txt = obj.strip()
+        # simple unit parser
+        m = re.search(r"(\d+(\.\d+)?)\s*(hour|hr|hours|hrs)", txt, re.I)
+        if m:
+            return float(m.group(1)), txt, None
+        m = re.search(r"(\d+(\.\d+)?)\s*(day|days)", txt, re.I)
+        if m:
+            return float(m.group(1)) * 8.0, txt, None  # assume 8h/day focused study
+        m = re.search(r"(\d+(\.\d+)?)\s*(week|weeks|wk|wks)", txt, re.I)
+        if m:
+            return float(m.group(1)) * 40.0, txt, None  # assume 40h/week
+        return None, txt, None
+
+    if isinstance(obj, dict):
+        # prefer explicit hours
+        for k in ("hours", "estimate_hours", "eta_hours"):
+            if k in obj:
+                try:
+                    h = float(obj[k])
+                except Exception:
+                    h = None
+                return h, obj.get("text") or obj.get("estimate_text") or obj.get("eta_text"), (
+                    float(obj.get("confidence")) if obj.get("confidence") is not None else None
+                )
+        # else try text
+        hours, txt, conf = _parse_eta_hours(obj.get("text") or obj.get("estimate_text") or obj.get("eta_text"))
+        if conf is None and obj.get("confidence") is not None:
+            try:
+                conf = float(obj.get("confidence"))
+            except Exception:
+                conf = None
+        return hours, txt, conf
+
+    return None, None, None
+
+def _heuristic_eta_hours(score_pct: float, gaps_count: int, ms_level: str) -> float:
+    """
+    Fallback ETA (hours) if LLM doesn't provide one.
+    Base hours per gap increases with difficulty; scaled by how far from PASS_GATE the score is.
+    """
+    level = (ms_level or "").lower()
+    base_per_gap = 6.0  # default beginner
+    if "intermediate" in level:
+        base_per_gap = 10.0
+    elif "advanced" in level:
+        base_per_gap = 15.0
+
+    # distance to gate; 0..1
+    distance = max(0.0, PASS_GATE - (score_pct / 100.0)) / max(PASS_GATE, 1e-6)
+    # ensure at least 1 gap contributes
+    eff_gaps = max(1, gaps_count)
+    hours = base_per_gap * eff_gaps * (0.75 + 0.5 * distance)  # 0.75–1.25x scaling
+    return round(hours, 1)
+
 # --------------------------- LLM prompt & call ---------------------------
 def _mk_prompt(seeker: Dict[str, Any], milestones: List[Dict[str, Any]]) -> str:
     """
@@ -234,6 +305,7 @@ def _mk_prompt(seeker: Dict[str, Any], milestones: List[Dict[str, Any]]) -> str:
                 "index": i,
                 "title": m.get("title") or m.get("milestone"),
                 "knowledge_text": _milestone_knowledge_text(m),
+                "level": m.get("level"),  # may help ETA
                 "prior_titles": [
                     (milestones[j].get("title") or milestones[j].get("milestone"))
                     for j in range(0, i)
@@ -244,24 +316,25 @@ def _mk_prompt(seeker: Dict[str, Any], milestones: List[Dict[str, Any]]) -> str:
         "rubric": {
             "gap_threshold": 0.5,
             "gap_min_when_score_below": {"threshold_pct": 60, "min_gaps": GAP_MIN},
+            "pass_gate": PASS_GATE,
         },
     }
 
     return (
-        "You are an expert career assessor in the Philippines. OUTPUT STRICT JSON ONLY (no markdown, no commentary).\n"
-        "When choosing a Milestone, make sure to take into account every single aspect as well as go beyond surface-level analysis and take into account the Philippine job economy\n"
-        "Make sure to review all milestones before choosing the appropriate one\n"
-        "Compare ONLY the job seeker's: skills, licenses & certifications, experience, education. However, make sure to go beyond surface level analysis and compare possible relational relevance in each metric.\n"
-        "to each milestone's KNOWLEDGE TEXT.\n"
+        "You are an expert career assessor in the Philippines. OUTPUT STRICT JSON ONLY (no markdown).\n"
+        "Compare ONLY the job seeker's: skills, licenses & certifications, experience, education — but consider relational relevance beyond surface matches.\n"
         "Assume that for milestone i, ALL prior milestones [0..i-1] are already achieved by the seeker.\n"
-        "Evaluate only the additional/next knowledge expected at milestone i.\n"
-        "For each milestone, produce:\n"
+        "Evaluate only the additional/next knowledge for milestone i.\n"
+        "For EACH milestone, return an object with:\n"
+        "  - index (number)\n"
+        "  - title (string)\n"
         "  - score_pct (0..100)\n"
         "  - matched_evidence: array of {\"item\",\"source\"} where source in {\"skills\",\"experience\",\"education\",\"licenses\"}\n"
-        "  - gaps: array of \"items\" representing missing knowledge for that milestone (post-assumption)\n"
-        "  - rationale: 1–2 sentences explaining the score in light of the assumption\n"
-        f"IMPORTANT: If score_pct < 60, include at least {GAP_MIN} gap items.\n"
-        "Return JSON with exactly these top-level keys: milestones_scored.\n\n"
+        "  - gaps: array of strings (missing knowledge items)\n"
+        "  - rationale: 1–2 sentences explaining the score\n"
+        "  - estimated_time: {\"hours\": number, \"text\": string, \"confidence\": number in [0,1]}  # time to reach pass_gate for this milestone, given current profile and assuming priors are achieved.\n"
+        f"IMPORTANT: If score_pct < 60, include at least {GAP_MIN} gaps.\n"
+        "Return JSON with exactly this top-level key: {\"milestones_scored\": [...]}.\n\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )
 
@@ -374,9 +447,10 @@ def _ensure_gap_min(row: Dict[str, Any], ms_keywords: List[str]) -> None:
     row["gaps"] = gaps
 
 # --------------------------- Finalization & selection ---------------------------
-def _finalize_scored(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _finalize_scored(scored: List[Dict[str, Any]], milestones: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out = []
     for idx, row in enumerate(scored or []):
+        # basic fields
         try:
             sp = float(row.get("score_pct", 0.0))
         except Exception:
@@ -387,7 +461,27 @@ def _finalize_scored(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         row["rationale"] = row.get("rationale") or ""
         row["matched_evidence"] = _normalize_matched(row.get("matched_evidence"))
         row["gaps"] = _normalize_gaps(row.get("gaps"))
+
+        # ETA normalization
+        eta_obj = row.get("estimated_time") or row.get("eta") or {}
+        eta_hours, eta_text, eta_conf = _parse_eta_hours(eta_obj)
+        # attach level for heuristics
+        ms = milestones[row["index"]] if 0 <= row["index"] < len(milestones) else {}
+        ms_level = ms.get("level") or ""
+        if eta_hours is None:
+            # heuristic fallback
+            eta_hours = _heuristic_eta_hours(row["score_pct"], len(row["gaps"] or []), ms_level)
+            if not eta_text:
+                eta_text = f"~{eta_hours} hours of focused study (heuristic)"
+            if eta_conf is None:
+                eta_conf = 0.5
+
+        row["eta_hours"] = round(float(eta_hours), 1)
+        row["eta_text"] = eta_text or f"~{row['eta_hours']} hours"
+        row["eta_confidence"] = float(eta_conf) if isinstance(eta_conf, (int, float)) else 0.5
+
         out.append(row)
+
     out.sort(key=lambda r: r.get("index", 0))
     return out
 
@@ -412,6 +506,7 @@ def locate_milestone_with_llm(
     LLM-based evaluation:
       • Compares ONLY seeker skills/experience/education/licenses to the milestone's knowledge content.
       • For milestone i, LLM ASSUMES milestones [0..i-1] are already achieved (cumulative progression).
+      • Adds ETA indicators per milestone: eta_hours, eta_text, eta_confidence.
     """
     road = _fetch_roadmap(roadmap_id, job_seeker_id, role)
     roadmap_id = road["roadmap_id"]
@@ -441,8 +536,8 @@ def locate_milestone_with_llm(
     prompt = _mk_prompt(seeker, milestones)
     raw = _call_llm(prompt)
 
-    # Normalize & finalize
-    milestones_scored = _finalize_scored(raw.get("milestones_scored") or [])
+    # Normalize & finalize (+ ETA)
+    milestones_scored = _finalize_scored(raw.get("milestones_scored") or [], milestones)
 
     # Hybrid backstop: light cosine against milestone keywords (defensive)
     flat_user = _flatten_user_knowledge(seeker)
@@ -468,6 +563,13 @@ def locate_milestone_with_llm(
         # enforce min gaps when score low
         _ensure_gap_min(row, ms_keys)
 
+        # if LLM ETA was missing and we used heuristic BEFORE cosine, it’s still fine;
+        # optionally adjust heuristic slightly based on distance after backstop:
+        if "heuristic" in (row.get("eta_text") or "").lower():
+            distance = max(0.0, PASS_GATE - (row["score_pct"] / 100.0)) / max(PASS_GATE, 1e-6)
+            row["eta_hours"] = round(row["eta_hours"] * (0.9 + 0.3 * distance), 1)
+            row["eta_text"] = f"~{row['eta_hours']} hours of focused study (heuristic)"
+
     # Decide current/next
     current_idx, next_idx = _pick_current_next(milestones_scored)
     current = milestones_scored[current_idx] if milestones_scored else None
@@ -479,10 +581,24 @@ def locate_milestone_with_llm(
     current_level = _band_for(current01)
     next_level = _band_for(next01)
 
+    # Build a small ETA summary for unfinished milestones (score < PASS_GATE)
+    eta_next = [
+        {
+            "index": r["index"],
+            "title": r.get("title"),
+            "eta_hours": r.get("eta_hours"),
+            "eta_text": r.get("eta_text"),
+            "eta_confidence": r.get("eta_confidence"),
+        }
+        for r in milestones_scored
+        if (r.get("score_pct", 0.0) / 100.0) < PASS_GATE
+    ]
+
     weights_meta = {
         "engine": "llm(assume-prior-achieved)+cosine-backstop",
         "pass_gate": PASS_GATE,
         "gap_min": GAP_MIN,
+        "eta_summary": eta_next,  # handy for UI
     }
 
     snapshot = store_seeker_milestone_status(
@@ -498,7 +614,7 @@ def locate_milestone_with_llm(
         gaps=current.get("gaps") if current else [],
         milestones_scored=milestones_scored,
         weights=weights_meta,
-        model_version=model_version or "llm-assume-prior-achieved-v1",
+        model_version=model_version or "llm-assume-prior-achieved+eta-v1",
         low_confidence=(current01 < PASS_GATE),
         calculated_at_iso=_now_iso(),
     )
