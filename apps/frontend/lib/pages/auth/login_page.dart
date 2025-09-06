@@ -43,23 +43,8 @@ class _LoginPageState extends State<LoginPage> {
         password: _passwordController.text,
       );
 
-      if (response.user != null) {
+      if (response.user != null && mounted) {
         _showSuccessSnackBar(AppConstants.loginSuccess);
-
-        final role = await _authService.getUserRole();
-
-        if (mounted) {
-          if (role == AppConstants.employerRole) {
-            Navigator.of(
-              context,
-            ).pushReplacementNamed(AppConstants.employerDashboardRoute);
-          } else if (role == AppConstants.jobSeekerRole) {
-            Navigator.of(
-              context,
-            ).pushReplacementNamed(AppConstants.jobSeekerDashboardRoute);
-          }
-          _showSuccessSnackBar(AppConstants.loginSuccess);
-        }
       }
     } catch (e) {
       if (mounted) {

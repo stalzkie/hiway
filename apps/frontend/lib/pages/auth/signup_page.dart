@@ -49,7 +49,7 @@ class _SignupPageState extends State<SignupPage> {
     });
 
     try {
-      final response = await _authService.signInWithEmail(
+      final response = await _authService.signUpWithEmail(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );

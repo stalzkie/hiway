@@ -1,19 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/pages/auth/auth_wrapper.dart';
 import 'package:hiway_app/pages/auth/login_page.dart';
 import 'package:hiway_app/pages/auth/signup_page.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hiway_app/pages/employer/dashboard.dart';
+import 'package:hiway_app/pages/home/home_page.dart';
+import 'package:hiway_app/pages/job-seeker/dashboard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await _configureSystemUI();
 
   await dotenv.load(fileName: ".env");
   await SupabaseConfig.initialize();
 
   runApp(const MyApp());
+}
+
+Future<void> _configureSystemUI() async {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -62,90 +79,6 @@ class MyApp extends StatelessWidget {
         AppConstants.employerDashboardRoute: (context) =>
             const EmployerDashboard(),
       },
-    );
-  }
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: _authService.authStateStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SplashScreen();
-        }
-
-        final session = snapshot.data?.session;
-
-        if (session == null) {
-          return FutureBuilder<String?>(
-            future: _authService.getUserRole(),
-            builder: (context, roleSnapshot) {
-              if (roleSnapshot.connectionState == ConnectionState.waiting) {
-                return const SplashScreen();
-              }
-
-              final role = roleSnapshot.data;
-
-              if (role == AppConstants.jobSeekerRole) {
-                return const JobSeekerDashboard();
-              } else if (role == AppConstants.employerRole) {
-                return const EmployerDashboard();
-              } else {
-                return const HomePage();
-              }
-            },
-          );
-        }
-
-        return const LoginPage();
-      },
-    );
-  }
-}
-
-class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.title});
-  final String title;
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }

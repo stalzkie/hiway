@@ -10,6 +10,9 @@ class JobSeekerModel {
   final List<dynamic> experience;
   final List<dynamic> education;
   final List<dynamic> licensesCertifications;
+  final String? searchDocument; 
+  final String? pineconeId; 
+  final String? embeddingChecksum; 
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -25,6 +28,9 @@ class JobSeekerModel {
     required this.experience,
     required this.education,
     required this.licensesCertifications,
+    this.searchDocument,
+    this.pineconeId,
+    this.embeddingChecksum,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -41,7 +47,11 @@ class JobSeekerModel {
       skills: json['skills'] as List<dynamic>? ?? [],
       experience: json['experience'] as List<dynamic>? ?? [],
       education: json['education'] as List<dynamic>? ?? [],
-      licensesCertifications: json['licenses_certifications'] as List<dynamic>? ?? [],
+      licensesCertifications:
+          json['licenses_certifications'] as List<dynamic>? ?? [],
+      searchDocument: json['search_document'] as String?,
+      pineconeId: json['pinecone_id'] as String?,
+      embeddingChecksum: json['embedding_checksum'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -60,6 +70,9 @@ class JobSeekerModel {
       'experience': experience,
       'education': education,
       'licenses_certifications': licensesCertifications,
+      'search_document': searchDocument,
+      'pinecone_id': pineconeId,
+      'embedding_checksum': embeddingChecksum,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -77,6 +90,9 @@ class JobSeekerModel {
     List<dynamic>? experience,
     List<dynamic>? education,
     List<dynamic>? licensesCertifications,
+    String? searchDocument,
+    String? pineconeId,
+    String? embeddingChecksum,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -91,7 +107,11 @@ class JobSeekerModel {
       skills: skills ?? this.skills,
       experience: experience ?? this.experience,
       education: education ?? this.education,
-      licensesCertifications: licensesCertifications ?? this.licensesCertifications,
+      licensesCertifications:
+          licensesCertifications ?? this.licensesCertifications,
+      searchDocument: searchDocument ?? this.searchDocument,
+      pineconeId: pineconeId ?? this.pineconeId,
+      embeddingChecksum: embeddingChecksum ?? this.embeddingChecksum,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -106,3 +126,4 @@ class JobSeekerModel {
   @override
   int get hashCode => jobSeekerId.hashCode;
 }
+
