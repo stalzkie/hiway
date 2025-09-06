@@ -771,6 +771,8 @@ def match_and_enrich(
 
     # Pull analyzer here to avoid circular imports at module import time
     from .skill_utils import analyze_required_vs_seeker
+    from .data_storer import persist_matcher_results
+
 
     out: List[Dict[str, Any]] = []
     for r in ranked:
@@ -808,6 +810,18 @@ def match_and_enrich(
             r.pop("job_post", None)
 
         out.append(r)
+
+    try:
+        persist_matcher_results(
+            auth_user_id=None,          # or pass through from API layer
+            job_seeker_id=job_seeker_id,
+            matcher_results=out,
+            default_weights=weights,
+            method="pinecone+rerank" if RERANK_ENABLE else "pinecone",
+            model_version=f"{RERANK_MODEL if RERANK_ENABLE else 'pinecone-only'}|{OPENAI_MODEL or GEMINI_MODEL}"
+        )
+    except Exception as e:
+        print(f"[WARN] Failed to persist matcher results: {e}")
 
     return out
 
