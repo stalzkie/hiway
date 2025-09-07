@@ -235,89 +235,83 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: _isLoading
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _selectedRole = AppConstants.jobSeekerRole;
-                                  });
-                                },
-                          child: Row(
-                            children: [
-                              Radio<String>(
-                                value: AppConstants.jobSeekerRole,
-                                groupValue: _selectedRole,
-                                onChanged: _isLoading
-                                    ? null
-                                    : (value) {
-                                        setState(() {
-                                          _selectedRole = value!;
-                                        });
-                                      },
-                              ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Job Seeker'),
-                                    Text(
-                                      'Looking for work',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ],
+                  RadioGroup<String>(
+                    groupValue: _selectedRole,
+                    onChanged: (value) {
+                      if (!_isLoading) {
+                        setState(() {
+                          _selectedRole = value!;
+                        });
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: _isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _selectedRole = AppConstants.jobSeekerRole;
+                                    });
+                                  },
+                            child: Row(
+                              children: [
+                                Radio<String>(
+                                  value: AppConstants.jobSeekerRole,
                                 ),
-                              ),
-                            ],
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Job Seeker'),
+                                      Text(
+                                        'Looking for work',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: InkWell(
-                          onTap: _isLoading
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _selectedRole = AppConstants.employerRole;
-                                  });
-                                },
-                          child: Row(
-                            children: [
-                              Radio<String>(
-                                value: AppConstants.employerRole,
-                                groupValue: _selectedRole,
-                                onChanged: _isLoading
-                                    ? null
-                                    : (value) {
-                                        setState(() {
-                                          _selectedRole = value!;
-                                        });
-                                      },
-                              ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Employer'),
-                                    Text(
-                                      'Hiring talent',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ],
+                        Expanded(
+                          child: InkWell(
+                            onTap: _isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _selectedRole = AppConstants.employerRole;
+                                    });
+                                  },
+                            child: Row(
+                              children: [
+                                Radio<String>(
+                                  value: AppConstants.employerRole,
                                 ),
-                              ),
-                            ],
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Employer'),
+                                      Text(
+                                        'Hiring talent',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 24),
@@ -381,11 +375,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   // Profile Handler
   void _handleAddExperience(Map<String, dynamic> experience) {
-    print('DEBUG: _handleAddExperience called with: $experience');
     setState(() {
       _experienceList.add(experience);
     });
-    print('DEBUG: Experience list now has ${_experienceList.length} items');
   }
 
   void _handleUpdateExperience(int index, Map<String, dynamic> experience) {
@@ -401,11 +393,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }
 
   void _handleAddEducation(Map<String, dynamic> education) {
-    print('DEBUG: _handleAddEducation called with: $education');
     setState(() {
       _educationList.add(education);
     });
-    print('DEBUG: Education list now has ${_educationList.length} items');
   }
 
   void _handleUpdateEducation(int index, Map<String, dynamic> education) {
@@ -421,11 +411,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }
 
   void _handleAddLicense(Map<String, dynamic> license) {
-    print('DEBUG: _handleAddLicense called with: $license');
     setState(() {
       _licensesList.add(license);
     });
-    print('DEBUG: License list now has ${_licensesList.length} items');
   }
 
   void _handleUpdateLicense(int index, Map<String, dynamic> license) {

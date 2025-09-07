@@ -86,15 +86,12 @@ class ExperienceSection extends StatelessWidget {
   }
 
   Future<void> _addExperience(BuildContext context) async {
-    print('DEBUG: _addExperience called');
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => const ExperienceDialog(),
     );
 
-    print('DEBUG: Dialog result: $result');
     if (result != null) {
-      print('DEBUG: Calling onAdd with result: $result');
       onAdd(result);
     }
   }
