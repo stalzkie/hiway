@@ -1,4 +1,3 @@
-// auth_service.dart - Improved version
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/core/error/exceptions.dart';
@@ -50,6 +49,8 @@ class AuthService {
       final response = await _auth.signUp(
         email: email.trim(),
         password: password,
+        emailRedirectTo:
+            null, // This will use the default redirect URL from dashboard
       );
 
       if (response.user == null) {
@@ -63,12 +64,52 @@ class AuthService {
     }
   }
 
-  // Create job seeker profile with better error handling
+  // Resend email confirmation
+  Future<void> resendEmailConfirmation({required String email}) async {
+    try {
+      await _auth.resend(type: OtpType.signup, email: email.trim());
+    } on AuthException catch (e) {
+      throw AuthException('Failed to resend confirmation: ${e.message}');
+    } catch (e) {
+      throw AuthException('Failed to resend confirmation: ${e.toString()}');
+    }
+  }
+
+  // Check if user needs email verification
+  bool get needsEmailVerification {
+    final user = currentUser;
+    return user != null && user.emailConfirmedAt == null;
+  }
+
+  // Create job seeker profile
   Future<JobSeekerModel> createJobSeekerProfile({
     required String fullName,
     required String email,
     String? phone,
     String? address,
+  }) async {
+    return createJobSeekerProfileWithDetails(
+      fullName: fullName,
+      email: email,
+      phone: phone,
+      address: address,
+      skills: [],
+      experience: [],
+      education: [],
+      licensesCertifications: [],
+    );
+  }
+
+  // Create job seeker profile with more details
+  Future<JobSeekerModel> createJobSeekerProfileWithDetails({
+    required String fullName,
+    required String email,
+    String? phone,
+    String? address,
+    List<String> skills = const [],
+    List<Map<String, dynamic>> experience = const [],
+    List<Map<String, dynamic>> education = const [],
+    List<Map<String, dynamic>> licensesCertifications = const [],
   }) async {
     try {
       final user = currentUser;
@@ -83,10 +124,10 @@ class AuthService {
         'phone': phone?.trim(),
         'address': address?.trim(),
         'role': AppConstants.jobSeekerRole,
-        'skills': [],
-        'experience': [],
-        'education': [],
-        'licenses_certifications': [],
+        'skills': skills,
+        'experience': experience,
+        'education': education,
+        'licenses_certifications': licensesCertifications,
       };
 
       final response = await _client
@@ -108,7 +149,7 @@ class AuthService {
     }
   }
 
-  // Create employer profile with better error handling
+  // Create employer profile
   Future<EmployerModel> createEmployerProfile({
     required String name,
     required String company,
@@ -145,19 +186,12 @@ class AuthService {
           .single();
 
       return EmployerModel.fromJson(response);
-    } on PostgrestException catch (e) {
-      if (e.code == '23505') {
-        throw DatabaseException('Profile already exists for this user');
-      }
-      throw DatabaseException('Database error: ${e.message}');
-    } on AuthException {
-      rethrow;
     } catch (e) {
       throw DatabaseException('Failed to create employer profile: $e');
     }
   }
 
-  // Get user role with better error handling
+  // Get user role
   Future<String?> getUserRole() async {
     try {
       final user = currentUser;
@@ -184,18 +218,13 @@ class AuthService {
       if (employerResponse != null) {
         return employerResponse['role'] as String;
       }
-
-      return null;
-    } on PostgrestException catch (e) {
-      print('Database error getting user role: ${e.message}');
       return null;
     } catch (e) {
-      print('Error getting user role: $e');
       return null;
     }
   }
 
-  // Get job seeker profile with better error handling
+  // Get job seeker profile
   Future<JobSeekerModel?> getJobSeekerProfile() async {
     try {
       final user = currentUser;
@@ -209,16 +238,12 @@ class AuthService {
 
       if (response == null) return null;
       return JobSeekerModel.fromJson(response);
-    } on PostgrestException catch (e) {
-      print('Database error getting job seeker profile: ${e.message}');
-      return null;
     } catch (e) {
-      print('Error getting job seeker profile: $e');
       return null;
     }
   }
 
-  // Get employer profile with better error handling
+  // Get employer profile
   Future<EmployerModel?> getEmployerProfile() async {
     try {
       final user = currentUser;
@@ -232,16 +257,12 @@ class AuthService {
 
       if (response == null) return null;
       return EmployerModel.fromJson(response);
-    } on PostgrestException catch (e) {
-      print('Database error getting employer profile: ${e.message}');
-      return null;
     } catch (e) {
-      print('Error getting employer profile: $e');
       return null;
     }
   }
 
-  // Logout with better error handling
+  // Logout
   Future<void> signOut() async {
     try {
       await _auth.signOut();
@@ -268,13 +289,13 @@ class AuthService {
   // Get user profile (either job seeker or employer)
   Future<dynamic> getUserProfile() async {
     final role = await getUserRole();
-    
+
     if (role == AppConstants.jobSeekerRole) {
       return await getJobSeekerProfile();
     } else if (role == AppConstants.employerRole) {
       return await getEmployerProfile();
     }
-    
+
     return null;
   }
 }

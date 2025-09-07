@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/core/utils/validators.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/pages/auth/email_verification_page.dart';
+import 'package:hiway_app/pages/auth/profile_setup_page.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 
 class SignupPage extends StatefulWidget {
@@ -16,27 +18,18 @@ class _SignupPageState extends State<SignupPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _fullNameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _companyController = TextEditingController();
-  final _positionController = TextEditingController();
   final AuthService _authService = AuthService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   String? _errorMessage;
-  String _selectedRole = AppConstants.jobSeekerRole;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _fullNameController.dispose();
-    _phoneController.dispose();
-    _companyController.dispose();
-    _positionController.dispose();
     super.dispose();
   }
 
@@ -54,48 +47,37 @@ class _SignupPageState extends State<SignupPage> {
         password: _passwordController.text,
       );
 
-      if (response.user != null) {
-        if (_selectedRole == AppConstants.jobSeekerRole) {
-          await _authService.createJobSeekerProfile(
-            fullName: _fullNameController.text.trim(),
-            email: _emailController.text.trim(),
-            phone: _phoneController.text.trim().isEmpty
-                ? null
-                : _phoneController.text.trim(),
+      if (response.user != null && mounted) {
+        // Check if user needs email verification
+        if (_authService.needsEmailVerification) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  EmailVerificationPage(email: _emailController.text.trim()),
+            ),
           );
         } else {
-          await _authService.createEmployerProfile(
-            name: _fullNameController.text.trim(),
-            company: _companyController.text.trim(),
-            companyPosition: _positionController.text.trim(),
-            companyEmail: _emailController.text.trim(),
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  ProfileSetupPage(email: _emailController.text.trim()),
+            ),
           );
-        }
-
-        if (mounted) {
-          _showSuccessSnackBar(AppConstants.registerSuccess);
-          Navigator.of(context).pop();
         }
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('AuthException: ', '');
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   @override
@@ -131,7 +113,7 @@ class _SignupPageState extends State<SignupPage> {
                     textAlign: TextAlign.center,
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 48),
 
                   if (_errorMessage != null)
                     Container(
@@ -160,80 +142,14 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                     ),
 
-                  Text(
-                    'I am a ',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Job Seeker'),
-                          value: AppConstants.jobSeekerRole,
-                          groupValue: _selectedRole,
-                          onChanged: _isLoading
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    _selectedRole = value!;
-                                  });
-                                },
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Employer'),
-                          value: AppConstants.employerRole,
-                          groupValue: _selectedRole,
-                          onChanged: _isLoading
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    _selectedRole = value!;
-                                  });
-                                },
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Full Name
-                  TextFormField(
-                    controller: _fullNameController,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: _selectedRole == AppConstants.jobSeekerRole
-                          ? 'Full Name *'
-                          : 'Contact Person Name',
-                      prefixIcon: const Icon(Icons.person),
-                    ),
-                    validator: Validators.validateFullName,
-                    enabled: !_isLoading,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Email
+                  // Email Field
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: _selectedRole == AppConstants.jobSeekerRole
-                          ? 'Email *'
-                          : 'Company Email',
-                      prefixIcon: const Icon(Icons.email),
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address *',
+                      prefixIcon: Icon(Icons.email),
                     ),
                     validator: Validators.validateEmail,
                     enabled: !_isLoading,
@@ -241,60 +157,13 @@ class _SignupPageState extends State<SignupPage> {
 
                   const SizedBox(height: 16),
 
-                  if (_selectedRole == AppConstants.jobSeekerRole)
-                    Column(
-                      children: [
-                        TextFormField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Phone Number (Optional)',
-                            prefixIcon: Icon(Icons.phone),
-                            helperText: 'Format: +639123456789',
-                          ),
-                          validator: Validators.validatePhoneNumber,
-                          enabled: !_isLoading,
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-
-                  // Company for Emplyer
-                  if (_selectedRole == AppConstants.employerRole) ...[
-                    TextFormField(
-                      controller: _companyController,
-                      textInputAction: TextInputAction.next,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Company Name',
-                        prefixIcon: Icon(Icons.business),
-                      ),
-                      validator: Validators.validateCompanyName,
-                      enabled: !_isLoading,
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _positionController,
-                      textInputAction: TextInputAction.next,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Your Position',
-                        prefixIcon: Icon(Icons.work),
-                      ),
-                      validator: Validators.validatePosition,
-                      enabled: !_isLoading,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
+                  // Password Field
                   TextFormField(
                     controller: _passwordController,
                     textInputAction: TextInputAction.next,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: 'Password *',
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -312,15 +181,16 @@ class _SignupPageState extends State<SignupPage> {
                     validator: Validators.validatePassword,
                     enabled: !_isLoading,
                   ),
+
                   const SizedBox(height: 16),
 
-                  // Confirm Password
+                  // Confirm Password Field
                   TextFormField(
                     controller: _confirmPasswordController,
                     textInputAction: TextInputAction.done,
                     obscureText: _obscureConfirmPassword,
                     decoration: InputDecoration(
-                      labelText: 'Confirm Password',
+                      labelText: 'Confirm Password *',
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -342,13 +212,15 @@ class _SignupPageState extends State<SignupPage> {
                     enabled: !_isLoading,
                     onFieldSubmitted: (_) => _signUp(),
                   ),
+
                   const SizedBox(height: 32),
 
                   LoadingButton(
                     onPressed: _signUp,
                     isLoading: _isLoading,
-                    child: const Text('Sign Up'),
+                    child: const Text('Continue'),
                   ),
+
                   const SizedBox(height: 16),
 
                   TextButton(

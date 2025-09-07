@@ -40,6 +40,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
               return const SplashScreen();
             }
 
+            if (roleSnapshot.hasError) {
+              return const LoginPage();
+            }
+
             final role = roleSnapshot.data;
 
             if (role == AppConstants.jobSeekerRole) {
@@ -76,13 +80,10 @@ class SplashScreen extends StatelessWidget {
             const SizedBox(height: 32),
             const LoadingIndicator(size: 48),
             const SizedBox(height: 16),
-            Text(
-              'Loading...',
-              style: Theme.of(context).textTheme.bodyLarge,
-            )
+            Text('Loading...', style: Theme.of(context).textTheme.bodyLarge),
           ],
-        )
-      )
+        ),
+      ),
     );
   }
 }
