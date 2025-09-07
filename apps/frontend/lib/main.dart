@@ -11,6 +11,8 @@ import 'package:hiway_app/pages/auth/profile_setup_page.dart';
 import 'package:hiway_app/pages/employer/dashboard.dart';
 import 'package:hiway_app/pages/home/home_page.dart';
 import 'package:hiway_app/pages/job_seeker/dashboard.dart';
+import 'package:hiway_app/pages/job_seeker/profile.dart';
+import 'package:hiway_app/pages/job_seeker/roadmap.dart';
 import 'package:hiway_app/pages/splash/splash_screen.dart' as splash;
 
 void main() async {
@@ -84,6 +86,8 @@ class MyApp extends StatelessWidget {
             const JobSeekerDashboard(),
         AppConstants.employerDashboardRoute: (context) =>
             const EmployerDashboard(),
+        AppConstants.profileRoute: (context) => const JobSeekerProfile(),
+        AppConstants.roadmapRoute: (context) => const JobSeekerRoadmap(),
         '/auth': (context) => const AuthWrapper(),
       },
       onGenerateRoute: (settings) {

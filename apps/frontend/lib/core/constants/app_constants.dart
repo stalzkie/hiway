@@ -14,6 +14,7 @@ class AppConstants {
   static const String jobSeekerDashboardRoute = '/job-seeker-dashboard';
   static const String employerDashboardRoute = '/employer-dashboard';
   static const String profileRoute = '/profile';
+  static const String roadmapRoute = '/roadmap';
 
   // Form Field
   static const String emailField = 'email';
