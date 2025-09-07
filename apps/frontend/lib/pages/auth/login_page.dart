@@ -10,6 +10,7 @@ class LoginPage extends StatefulWidget {
 
   @override
   State<LoginPage> createState() => _LoginPageState();
+  
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -102,17 +103,21 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 64),
 
                   Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.work,
-                      color: Colors.white,
-                      size: 40,
-                    ),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Center (
+                            child: Image.asset(
+                              'assets/images/hiway-vector.png',
+                              width: 120,
+                              height: 120,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.image_not_supported,
+                                  size: 60,
+                                  color: const Color(0xFF352DC3),
+                                );
+                              },
+                            ),
+                      ),
                   ),
 
                   const SizedBox(height: 24),
