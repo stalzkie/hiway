@@ -44,9 +44,7 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
     try {
       await _authService.signOut();
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(AppConstants.loginRoute, (route) => false);
+        Navigator.of(context).pushNamed(AppConstants.loginRoute);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
