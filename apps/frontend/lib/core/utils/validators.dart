@@ -138,8 +138,7 @@ class Validators {
       return 'Please enter a valid Philippine phone number (09xxxxxxxxx or +639xxxxxxxxx)';
     }
 
-    return null;
-  }
+    return null;}
 
   static String? validateCompanyName(String? value) {
     if (value == null || value.isEmpty) {

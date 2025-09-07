@@ -273,15 +273,20 @@ def store_seeker_milestone_status(
     current_score_pct: Optional[float],
     next_milestone: Optional[str],
     next_level: Optional[str],
-    gaps: Optional[List[str]],
+    gaps: Optional[List[Any]],
     milestones_scored: List[Dict[str, Any]],
-    weights: Dict[str, float],
+    weights: Dict[str, Any],
     model_version: Optional[str] = None,
     low_confidence: bool = False,
     calculated_at_iso: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Inserts ONE snapshot row describing where the seeker currently is in the roadmap.
+
+    Notes:
+    - `milestones_scored` may include ETA fields per milestone:
+        eta_hours (float), eta_text (str), eta_confidence (float 0..1)
+    - `weights` may include an `eta_summary` array for unfinished milestones.
     """
     row = {
         "job_seeker_id": job_seeker_id,

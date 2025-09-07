@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 from apps.backend.services.orchestrator import orchestrate_user_update
 
@@ -65,6 +65,50 @@ def _normalize_gaps_field(val: Any) -> List[Dict[str, Any]]:
             out.append(c)
     return out
 
+def _coerce_float(val: Any) -> Optional[float]:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    try:
+        # tolerate strings like "12.5" or "~12.5 hours"
+        s = str(val).strip()
+        num = ""
+        dot_seen = False
+        for ch in s:
+            if ch.isdigit():
+                num += ch
+            elif ch == "." and not dot_seen:
+                num += ch
+                dot_seen = True
+            elif num:
+                break
+        return float(num) if num else None
+    except Exception:
+        return None
+
+def _coerce_str(val: Any) -> Optional[str]:
+    if val is None:
+        return None
+    try:
+        s = str(val).strip()
+        return s if s else None
+    except Exception:
+        return None
+
+def _clamp01(x: Optional[float]) -> Optional[float]:
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except Exception:
+        return None
+    if xf < 0:
+        return 0.0
+    if xf > 1:
+        return 1.0
+    return xf
+
 # ---------------- Nested Schemas ----------------
 class MilestoneMatchedEvidence(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -88,22 +132,46 @@ class MilestoneScore(BaseModel):
     gaps: Optional[List[MilestoneGap]] = None
     rationale: Optional[str] = None  # 1–2 sentences
 
+    # NEW: ETA fields from milestone_locator
+    eta_hours: Optional[float] = Field(
+        default=None,
+        description="Estimated focused hours to reach pass_gate for this milestone"
+    )
+    eta_text: Optional[str] = Field(
+        default=None,
+        description="Human-friendly ETA (e.g., '~12 hours' or '~1.5 weeks @ 10h/week')"
+    )
+    eta_confidence: Optional[float] = Field(
+        default=None, ge=0, le=1,
+        description="LLM/heuristic confidence 0..1"
+    )
+
     # ---- Defensive coercions (accept legacy shapes gracefully) ----
     @field_validator("matched_evidence", mode="before")
     @classmethod
     def _coerce_matched(cls, v: Any):
         # Accept legacy fields too: skills_scored / outcomes_scored -> map to matched_evidence (item only)
-        if not v:
-            # try legacy merge if present
-            # NOTE: validator sees only the field; we can’t access siblings here,
-            # so just normalize v if provided. Service should already return the new shape.
-            return _normalize_matched_field(v)
         return _normalize_matched_field(v)
 
     @field_validator("gaps", mode="before")
     @classmethod
     def _coerce_gaps(cls, v: Any):
         return _normalize_gaps_field(v)
+
+    @field_validator("eta_hours", mode="before")
+    @classmethod
+    def _coerce_eta_hours(cls, v: Any):
+        return _coerce_float(v)
+
+    @field_validator("eta_text", mode="before")
+    @classmethod
+    def _coerce_eta_text(cls, v: Any):
+        return _coerce_str(v)
+
+    @field_validator("eta_confidence", mode="before")
+    @classmethod
+    def _coerce_eta_conf(cls, v: Any):
+        return _clamp01(_coerce_float(v))
 
 class MilestoneStatus(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -116,7 +184,10 @@ class MilestoneStatus(BaseModel):
     next_level: Optional[str] = None
     gaps: Optional[List[MilestoneGap]] = None
     milestones_scored: Optional[List[MilestoneScore]] = None
-    weights: Optional[Dict[str, Any]] = None
+    weights: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description='May include {"pass_gate","gap_min","engine","eta_summary":[{"index","title","eta_hours","eta_text","eta_confidence"}]}'
+    )
     model_version: Optional[str] = None
     low_confidence: Optional[bool] = None
     calculated_at: Optional[str] = None  # we’ll map calculated_at_iso -> calculated_at
@@ -155,15 +226,15 @@ class OrchestratorResponse(BaseModel):
 @router.post(
     "/orchestrate",
     response_model=OrchestratorResponse,
-    summary="Run orchestrator and locate current milestone (knowledge-match; prior milestones assumed achieved)",
+    summary="Run orchestrator and locate current milestone (knowledge-match; prior milestones assumed achieved; includes ETA)",
     description=(
         "Resolves the seeker by email, updates job-match snapshots if the profile changed (or force=true), "
         "ensures a role-specific roadmap exists (creates if missing), and locates the seeker's current milestone.\n\n"
-        "Scoring now compares ONLY the job seeker's skills, experience, education, and licenses/certifications "
+        "Scoring compares ONLY the job seeker's skills, experience, education, and licenses/certifications "
         "against the KNOWLEDGE content of each milestone. When evaluating milestone i, the evaluator ASSUMES all "
-        "prior milestones [0..i-1] are already achieved and focuses on incremental knowledge. "
-        "Response includes matched_evidence (item+source), gaps (missing knowledge items), score_pct, and rationale. "
-        "Weights may include pass_gate and gap_min; engine typically 'llm(assume-prior-achieved)+cosine-backstop'."
+        "prior milestones [0..i-1] are already achieved and focuses on incremental knowledge.\n\n"
+        "Each milestone may include ETA fields: eta_hours, eta_text, and eta_confidence. "
+        "The weights object may include an eta_summary array for unfinished milestones."
     ),
 )
 def run_orchestrator(

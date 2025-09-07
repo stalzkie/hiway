@@ -538,7 +538,7 @@ def _compose_overall_prompt(
     return (
         "You are summarizing a job-match result produced by vector (semantic) similarity across sections. "
         "Write a concise 2–4 sentence explanation that helps the user understand WHY this score happened, "
-        "even if there were few or no exact keyword matches. "
+        "even if there were few or no exact keyword matches. Write in a simple manner where it can be understood by non-native English speakers and be straight to the point"
         "Ground the explanation in the per-section semantic similarities (skills/experience/education/licenses) "
         "and in the job vs seeker contexts. If there are no exact matches, clarify that the score still comes from "
         "semantic overlap in responsibilities, tools, or outcomes. Avoid using too much jargons and simplify your sentences.\n\n"
