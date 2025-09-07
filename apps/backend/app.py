@@ -3,7 +3,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apps.backend.api.endpoints import orchestrator
 
 # ---- Load environment variables early ----
 # Try repo root and backend folder
@@ -15,26 +14,29 @@ for p in [ROOT / ".env", BACKEND / ".env"]:
         load_dotenv(p, override=False)
 
 # ---- Import routers AFTER env is loaded ----
-from apps.backend.api.endpoints import matcher, scraper
+from apps.backend.api.endpoints import matcher, scraper, orchestrator  # noqa: E402
 
 # ---- App config ----
 app = FastAPI(
     title="HiWay Backend",
     version="1.0.0",
-    description="API for job seeker/job post matching and related services"
+    description="API for job seeker/job post matching and related services",
 )
 
 # ---- CORS (adjust origins for your frontend domain) ----
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: in prod replace with your frontend domain
+    allow_origins=["*"],  # TODO: in prod replace with your frontend domain(s)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ---- Routers ----
-app.include_router(matcher.router, prefix="/matcher", tags=["matcher"])
+# Expose matcher at /match (so GET /match works)
+app.include_router(matcher.router, prefix="", tags=["matcher"])
+
+# Keep the others as-is
 app.include_router(scraper.router, prefix="/scraper", tags=["scraper"])
 app.include_router(orchestrator.router, prefix="/api", tags=["Orchestrator"])
 
