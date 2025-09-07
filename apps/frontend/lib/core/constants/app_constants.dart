@@ -57,4 +57,9 @@ class AppConstants {
   // Table Names in Database
   static const String jobSeekerTable = 'job_seeker';
   static const String employerTable = 'employer';
+
+  // API Base (used by JobService to call FastAPI backend)
+  static const String apiBase = 'http://10.0.2.2:8000';
+  // For mobile testing on a real device, replace with LAN IP:
+  // static const String apiBase = 'http://192.168.1.5:8000';
 }
