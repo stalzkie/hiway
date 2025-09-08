@@ -59,5 +59,5 @@ class AppConstants {
   static const String employerTable = 'employer';
 
   // API Base (used by JobService to call FastAPI backend)
-  static const String apiBase = 'https://hiway-production-ec0e.up.railway.app/';
+  static const String apiBase = 'http://10.0.2.2:8000';
 }

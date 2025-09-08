@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, EmailStr
 from supabase import create_client, Client
 
 from apps.backend.services.matcher import (
-    match_and_enrich,
+    rank_posts_for_seeker,
     get_seeker_id_by_email,
 )
 from apps.backend.services.data_storer import persist_matcher_results
@@ -174,18 +174,18 @@ class SkillAnalysis(BaseModel):
     )
     overall_summary: Optional[str] = Field(
         default=None,
-        description="2–4 sentence summary explaining the score via semantic/vector similarity across sections",
+        description="2–4 sentence summary explaining the score using LLM + vector retrieval",
     )
 
 class MatchItem(BaseModel):
     job_post_id: str = Field(..., description="UUID of the job post")
-    confidence: float = Field(..., ge=0, le=100, description="Weighted confidence (0..100)")
-    section_scores: SectionScores = Field(..., description="Best match per section")
+    confidence: float = Field(..., ge=0, le=100, description="Final LLM-blended score (0..100)")
+    section_scores: SectionScores = Field(..., description="Per-section scores (0..100)")
     job_post: Optional[dict] = Field(
         None, description="Job post row (included when include_details=true)"
     )
     analysis: Optional[SkillAnalysis] = Field(
-        None, description="Required vs seeker skill breakdown and explanations"
+        None, description="Required vs seeker skill breakdown and LLM explanations"
     )
 
 class MatchResponse(BaseModel):
@@ -199,10 +199,10 @@ class MatchResponse(BaseModel):
     response_model=MatchResponse,
     summary="Match Seeker To Jobs",
     description=(
-        "Returns job posts ranked for the given job seeker via Pinecone cosine similarities, "
-        "optionally reranked with a cross-encoder and enriched with LLM explanations. "
-        "Provide either job_seeker_id or email (email will be resolved to a seeker UUID). "
-        "Results are also persisted to Supabase in job_match_scores/job_match_scores_cache."
+        "Retrieves candidate job posts from Pinecone (per-section vectors) and scores them "
+        "with an LLM using retrieved context (RAG). The LLM produces stricter per-section "
+        "scores (skills / experience / education / licenses) and a final confidence (0..100). "
+        "Provide either job_seeker_id or email (email will be resolved). Results may be persisted."
     ),
 )
 def match_seeker_to_jobs(
@@ -224,9 +224,10 @@ def match_seeker_to_jobs(
         1, ge=1, le=4, description="Require at least N sections to contribute to a post’s score", example=2
     ),
     include_explanations: bool = Query(
-        False,
-        description="If true, generate per-skill explanations and an overall semantic summary",
+        True,
+        description="LLM explanations and overall summary are now ALWAYS used for scoring; keep true.",
         example=True,
+        deprecated=True,  # kept for backwards compatibility, scorer now always uses LLM
     ),
     eager_embed: bool = Query(
         True,
@@ -239,7 +240,7 @@ def match_seeker_to_jobs(
       1) Resolve job_seeker_id (or from email).
       2) Enqueue seeker + any stale posts (with a valid NOT-NULL 'reason').
       3) (Optional) Run 1–2 quick worker passes and briefly poll for the seeker's embeddings.
-      4) Run matcher + persist results.
+      4) Run LLM-first matcher (RAG) + persist results.
     """
     # 1) Resolve seeker id
     if email and not job_seeker_id:
@@ -262,26 +263,25 @@ def match_seeker_to_jobs(
         except Exception as e:
             print(f"[WARN] eager embed pipeline failed (non-fatal): {e}")
 
-    # 4) Run matcher
+    # 4) Run matcher (LLM-first + RAG)
     try:
-        results: List[Dict[str, Any]] = match_and_enrich(
+        results: List[Dict[str, Any]] = rank_posts_for_seeker(
             job_seeker_id=job_seeker_id,
             top_k_per_section=top_k,
-            include_details=include_details,
+            include_job_details=include_details,
             min_sections=min_sections,
-            include_explanations=include_explanations,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Persist results to Supabase
+    # Persist results to Supabase (optional; rank_posts_for_seeker already persists)
     try:
         persist_matcher_results(
             auth_user_id=None,
             job_seeker_id=job_seeker_id,
             matcher_results=results,
             default_weights=None,
-            method=f"pinecone+rerank (reason={reason})",
+            method=f"rag-llm (reason={reason})",
             model_version="api-endpoint",
         )
     except Exception as e:
