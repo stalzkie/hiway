@@ -110,24 +110,26 @@ def store_match_scores_bulk(
     rows: List[Dict[str, Any]] = []
     for it in items or []:
         analysis = _ensure_dict(it.get("analysis"))
-        rows.append(
-            {
-                "job_seeker_id": job_seeker_id,
-                "job_post_id": it["job_post_id"],
-                "auth_user_id": auth_user_id,
-                "confidence": round(float(it["confidence"]), 2),
-                "section_scores": _ensure_dict(it.get("section_scores")),
-                "weights": _ensure_dict(it.get("weights") or default_weights or {}),
-                "rerank_enabled": bool(it.get("rerank_enabled", False)),
-                "method": method,
-                "model_version": model_version,
-                "calculated_at": _now_iso(),
-                "matched_skills": _ensure_list(analysis.get("matched_skills")),
-                "missing_skills": _ensure_list(analysis.get("missing_skills")),
-                "matched_explanations": _ensure_dict(analysis.get("matched_explanations")),
-                "overall_summary": analysis.get("overall_summary"),
-            }
-        )
+        row = {
+            "job_seeker_id": job_seeker_id,
+            "job_post_id": it["job_post_id"],
+            "auth_user_id": auth_user_id,
+            "confidence": round(float(it["confidence"]), 2),
+            "section_scores": _ensure_dict(it.get("section_scores")),
+            "weights": _ensure_dict(it.get("weights") or default_weights or {}),
+            "rerank_enabled": bool(it.get("rerank_enabled", False)),
+            "method": method,
+            "model_version": model_version,
+            "calculated_at": _now_iso(),
+            "matched_skills": _ensure_list(analysis.get("matched_skills")),
+            "missing_skills": _ensure_list(analysis.get("missing_skills")),
+            "matched_explanations": _ensure_dict(analysis.get("matched_explanations")),
+            "overall_summary": analysis.get("overall_summary"),
+        }
+        # Remove 'analysis' key if present (should not be in DB row)
+        if "analysis" in row:
+            del row["analysis"]
+        rows.append(row)
     if not rows:
         return []
     res = _sb.table("job_match_scores").insert(rows).execute()

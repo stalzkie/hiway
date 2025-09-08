@@ -23,10 +23,10 @@ VALID_SCOPES: Tuple[str, ...] = ("skills", "experience", "education", "licenses"
 
 # Default section weights for hybrid cosine aggregation
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "skills":     0.45,
-    "experience": 0.35,
-    "education":  0.10,
-    "licenses":   0.10,
+    "skills":     0.40,
+    "experience": 0.30,
+    "education":  0.15,
+    "licenses":   0.15,
 }
 
 # Cross-encoder reranker (enabled by default)
@@ -46,9 +46,9 @@ GEMINI_MODEL     = "gemini-1.5-pro"
 DEFAULT_TOP_K_PER_SECTION = 30
 
 # Stricter calibration of raw cosine -> 0..100 (smooth, not hard caps)
-# Logistic centered at ~0.62 with sharpness 12: modest similarities stay modest.
+# Example: s=0.45 → ~8.3%, s=0.65 → ~50%, s=0.85 → ~95%
 CAL_K = 12.0
-CAL_M = 0.62
+CAL_M = 0.65
 
 # =========================== ENV CHECKS =============================
 
@@ -194,17 +194,17 @@ def _aggregate_scores(
         if len(section_best) < min_sections:
             continue
 
-        weight_sum = 0.0
-        weighted = 0.0
-        for scope, score_cal in section_best.items():
-            w = float(weights.get(scope, 0.0))
-            if w <= 0:
-                continue
-            weighted += w * score_cal
-            weight_sum += w
-
+        # Calculate total weight sum from all valid scopes upfront
+        weight_sum = sum(float(weights.get(s, 0.0)) for s in VALID_SCOPES)
         if weight_sum <= 0:
             continue
+
+        # Sum weighted scores, treating missing sections as 0
+        weighted = 0.0
+        for scope in VALID_SCOPES:
+            w = float(weights.get(scope, 0.0))
+            score_cal = float(section_best.get(scope, 0.0))  # 0 if section missing
+            weighted += w * score_cal
 
         confidence = weighted / weight_sum  # already 0..100 (calibrated per-section)
         ranked.append({
@@ -445,6 +445,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "Reason with context, not just keywords. Make sure to triple check and recalculate before sending in the final scores. "
         "OUTPUT ONLY valid JSON and match the provided response_schema_hint exactly—no prose, no markdown, no extra keys.\n\n"
         "Scoring principles (be conservative and evidence-based):\n"
+        "Add a deduction of appropriate points if the entire list of skills, licenses, experiences, and certificates of the job seeker are nowhere related to the job post requirements. For example, the skills of a carpenter must not reach 10% to the confidence score of tech jobs. Use this for other test cases.\n"
         "• Prioritize hard/technical requirements (tools, frameworks, languages, platforms, certifications, years, seniority).\n"
         "• Use deep context alignment: responsibilities, scope/impact, seniority (IC vs lead/manager), domain/industry, and outcomes.\n"
         "• Synonyms/near-equivalents may count (React ↔ frontend React; Google Cloud ↔ GCP), but generic terms do not.\n"
@@ -460,7 +461,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "type": "array",
         "items": {
             "type": "object",
-            "required": ["job_post_id", "section_scores", "overall", "matched_skills", "missing_skills"],
+            "required": ["job_post_id", "section_scores", "overall", "matched_skills", "missing_skills", "domain_mismatch"],
             "properties": {
                 "job_post_id": {"type": "string"},
                 "section_scores": {
@@ -476,6 +477,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
                 "matched_skills": {"type": "array", "items": {"type": "string"}},
                 "missing_skills": {"type": "array", "items": {"type": "string"}},
                 "matched_explanations": {"type": "object", "additionalProperties": {"type": "string"}},
+                "domain_mismatch": {"type": "boolean", "description": "True if candidate's domain is completely unrelated to the job"},
                 "notes": {"type": "string"},
             }
         }
@@ -486,9 +488,10 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "jobs": jobs_ctx,
         "instructions": {
             "explanation_style": "1–2 sentences per matched skill; simple, specific, low-jargon",
-            "overall_weighting": "Compute overall as ~60% skills, 30% experience, 10% education/licenses; "
+            "overall_weighting": "Compute overall as ~40% skills, 30% experience, 15% education/licenses; "
                                  "IF education_required=false or license_required=false for a job, exclude that section from the overall weighting.",
-            "strictness": "Be conservative if only soft skills match.",
+            "strictness": "Be EXTREMELY conservative. Unrelated domains must not exceed 5%. Similar but different domains must not exceed 15%.",
+            "domain_rules": "Set domain_mismatch=true if backgrounds are completely unrelated (e.g., construction worker applying to software dev).",
         },
         "response_schema_hint": schema_hint,
     }
@@ -587,8 +590,13 @@ def rank_posts_for_seeker(
     pids = [r["job_post_id"] for r in ranked]
     posts_map = _fetch_posts_map(pids)
 
+
     # Cross-encoder reranker
     ranked = _apply_reranker(job_seeker_id, ranked, posts_map)
+
+    # Filter out job posts that do not exist in the job_post table
+    valid_post_ids = set(posts_map.keys())
+    ranked = [r for r in ranked if r["job_post_id"] in valid_post_ids]
 
     # 4) LLM judge on the top subset, then blend with hybrid
     if LLM_ENABLE and ranked:
@@ -609,13 +617,22 @@ def rank_posts_for_seeker(
             j = judged_by_pid.get(pid)
             if not j:
                 continue
-            # Blend LLM overall with current confidence
+            # Check for domain mismatch and apply strict penalty
             try:
                 llm_overall = float(j.get("overall", 0.0))
+                is_domain_mismatch = j.get("domain_mismatch", False)
+                
+                # Force very low scores for domain mismatches
+                if is_domain_mismatch:
+                    llm_overall = min(5.0, llm_overall)  # Hard cap at 5% for complete mismatches
+                    r["confidence"] = min(5.0, r["confidence"])  # Cap hybrid score too
+                
+                # Regular blending for non-mismatches
+                blended = (1.0 - LLM_WEIGHT) * float(r["confidence"]) + LLM_WEIGHT * llm_overall
+                r["confidence"] = round(min(blended, 15.0 if is_domain_mismatch else 100.0), 2)
             except Exception:
                 llm_overall = 0.0
-            blended = (1.0 - LLM_WEIGHT) * float(r["confidence"]) + LLM_WEIGHT * llm_overall
-            r["confidence"] = round(blended, 2)
+                r["confidence"] = round(min(r["confidence"], 15.0), 2)  # Conservative cap if LLM fails
 
             # Optionally surface LLM section scores into section_scores (soft override)
             js = j.get("section_scores") or {}
@@ -740,11 +757,14 @@ def match_and_enrich(
     out: List[Dict[str, Any]] = []
     for r in results:
         if include_details:
-            out.append(r)
+            x = dict(r)
         else:
             x = dict(r)
             x.pop("job_post", None)
-            out.append(x)
+        # Always remove 'analysis' key before persisting to DB
+        if "analysis" in x:
+            del x["analysis"]
+        out.append(x)
 
     # Persist (best-effort)
     try:
