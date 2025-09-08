@@ -18,7 +18,8 @@ class JobSeekerDashboard extends StatefulWidget {
 
 class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   final AuthService _authService = AuthService();
-  final JobService _jobService = JobService();
+  final JobService _jobService = JobService(apiBase: AppConstants.apiBase);
+
   final TextEditingController _searchController = TextEditingController();
 
   JobSeekerModel? _profile;
@@ -39,29 +40,79 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     super.dispose();
   }
 
+  /// Only use jobSeekerId. The /match endpoint expects job_seeker_id (UUID).
+  String? _seekerId() => _profile?.jobSeekerId;
+
   Future<void> _loadDashboardData() async {
     try {
-      final results = await Future.wait([
-        _authService.getJobSeekerProfile(),
-        _jobService.getRecommendedJobs(),
-      ]);
+      final profile = await _authService.getJobSeekerProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _isLoading = false;
+      });
 
-      if (mounted) {
-        setState(() {
-          _profile = results[0] as JobSeekerModel?;
-          _recommendedJobs = results[1] as List<JobModel>;
-          _isLoading = false;
-          _isLoadingJobs = false;
-        });
+      await _loadRecommendedOrFallback();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isLoadingJobs = false;
+      });
+    }
+  }
+
+  /// Try personalized from /match; if empty/error, fallback to generic Supabase list.
+  Future<void> _loadRecommendedOrFallback() async {
+    setState(() => _isLoadingJobs = true);
+
+    List<JobModel> jobs = const <JobModel>[];
+    try {
+      final seekerId = _seekerId();
+      if (seekerId != null && seekerId.isNotEmpty) {
+        jobs = await _jobService.getRecommendedJobs(jobSeekerId: seekerId);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isLoadingJobs = false;
-        });
+    } catch (_) {
+      // swallow and fallback below
+    }
+
+    if (jobs.isEmpty) {
+      try {
+        jobs = await _jobService.getAllJobs(limit: 20);
+      } catch (_) {
+        // still empty
       }
     }
+
+    if (!mounted) return;
+    setState(() {
+      _recommendedJobs = jobs;
+      _isLoadingJobs = false;
+    });
+  }
+
+  // Unpersonalized search/browse list (explicit user search)
+  Future<void> _searchJobs({String? query}) async {
+    setState(() => _isLoadingJobs = true);
+    try {
+      final jobs = await _jobService.getAllJobs(
+        searchQuery: (query ?? _searchController.text).trim(),
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recommendedJobs = jobs;
+        _isLoadingJobs = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingJobs = false);
+    }
+  }
+
+  Future<void> _refresh() async {
+    _searchController.clear();
+    await _loadRecommendedOrFallback();
   }
 
   @override
@@ -98,7 +149,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           colors: [
             AppTheme.primaryColor,
             AppTheme.secondaryColor,
-            AppTheme.primaryColor.withValues(alpha: 0.8),
+            AppTheme.primaryColor.withValues(alpha: 0.8), 
           ],
         ),
       ),
@@ -125,10 +176,10 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
+            color: Colors.white.withValues(alpha: 0.15), 
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(Icons.work_outline, color: Colors.white, size: 24),
+          child: const Icon(Icons.work_outline, color: Colors.white, size: 24),
         ),
         const Spacer(),
         GestureDetector(
@@ -136,14 +187,14 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: Colors.white.withValues(alpha: 0.15), 
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
+                color: Colors.white.withValues(alpha: 0.3), 
                 width: 1,
               ),
             ),
-            child: Icon(Icons.person_outline, color: Colors.white, size: 24),
+            child: const Icon(Icons.person_outline, color: Colors.white, size: 24),
           ),
         ),
       ],
@@ -152,7 +203,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
 
   Widget _buildWelcomeSection() {
     final greeting = _getGreeting();
-    final userName = _profile?.fullName.split(' ').first ?? 'there';
+    final userName = (_profile?.fullName ?? 'there').split(' ').first; 
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,7 +227,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
                   Text(
                     'Let\'s find your perfect job',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: Colors.white.withValues(alpha: 0.9), 
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                     ),
@@ -198,7 +249,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
+            color: Colors.black.withValues(alpha: 0.15), 
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -221,17 +272,15 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
               size: 20,
             ),
           ),
-          suffixIcon: Container(
-            padding: const EdgeInsets.all(15),
-            child: Icon(Icons.tune_rounded, color: Colors.grey.shade600, size: 20),
+          suffixIcon: IconButton(
+            icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600, size: 20),
+            onPressed: () => _searchJobs(),
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 17,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
         ),
-        onSubmitted: _handleSearch,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (q) => _searchJobs(query: q),
       ),
     );
   }
@@ -240,16 +289,17 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
       ),
-      child: Column(
-        children: [
-          _buildSectionHeader(),
-          Expanded(child: _buildJobsList()),
-        ],
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        // IMPORTANT: child must be scrollable even when loading/empty (see _buildJobsList)
+        child: Column(
+          children: [
+            _buildSectionHeader(),
+            Expanded(child: _buildJobsList()),
+          ],
+        ),
       ),
     );
   }
@@ -270,8 +320,8 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           ),
           const Spacer(),
           TextButton(
-            onPressed: () {
-              // Navigate to all jobs
+            onPressed: () async {
+              await _searchJobs(); // show generic list
             },
             child: Text(
               'View all',
@@ -288,15 +338,27 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   }
 
   Widget _buildJobsList() {
+    // Always return a scrollable to keep RefreshIndicator working
     if (_isLoadingJobs) {
-      return const Center(child: LoadingIndicator(size: 32));
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        children: const [
+          Center(child: LoadingIndicator(size: 32)),
+        ],
+      );
     }
 
     if (_recommendedJobs.isEmpty) {
-      return _buildEmptyState();
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+        children: [ _buildEmptyState() ],
+      );
     }
 
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       itemCount: _recommendedJobs.length,
       itemBuilder: (context, index) {
@@ -315,39 +377,24 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+              color: AppTheme.primaryColor.withValues(alpha: 0.1), 
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.work_outline_rounded,
-              size: 64,
-              color: AppTheme.primaryColor,
-            ),
+            child: Icon(Icons.work_outline_rounded, size: 64, color: AppTheme.primaryColor),
           ),
           const SizedBox(height: 24),
           Text(
             'No jobs found',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkColor,
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.darkColor),
           ),
           const SizedBox(height: 8),
           Text(
-            'Complete your profile to get personalized job recommendations',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade600,
-              height: 1.4,
-            ),
+            'Try a different search term or pull to refresh',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.4),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => _handleBottomNavTap(2),
-            child: const Text('Complete Profile'),
-          ),
+          ElevatedButton(onPressed: _refresh, child: const Text('Refresh')),
         ],
       ),
     );
@@ -360,10 +407,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     return 'Good evening';
   }
 
-  void _handleSearch(String query) {
-    debugPrint('Searching for: $query');
-  }
-
   void _handleJobTap(JobModel job) {
     debugPrint('Tapped on job: ${job.title}');
   }
@@ -371,7 +414,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   void _handleBottomNavTap(int index) {
     switch (index) {
       case 0:
-        // Already on dashboard
         break;
       case 1:
         Navigator.pushNamed(context, AppConstants.roadmapRoute);

@@ -47,10 +47,12 @@ class JobCard extends StatelessWidget {
     );
   }
 
+  // ---------------- Header ----------------
+
   Widget _buildHeader() {
     return Row(
       children: [
-        _buildCompanyIcon(),
+        _buildCompanyMark(),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -85,15 +87,12 @@ class JobCard extends StatelessWidget {
                   ),
                   if (job.location.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey[500],
-                    ),
+                    Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
                     const SizedBox(width: 2),
                     Text(
                       job.location,
                       style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ],
@@ -107,7 +106,27 @@ class JobCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCompanyIcon() {
+  Widget _buildCompanyMark() {
+    final hasLogo = (job.companyLogo != null && job.companyLogo!.trim().isNotEmpty);
+    if (hasLogo) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 56,
+          height: 56,
+          color: Colors.grey[50],
+          child: Image.network(
+            job.companyLogo!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _fallbackCompanyIcon(),
+          ),
+        ),
+      );
+    }
+    return _fallbackCompanyIcon();
+  }
+
+  Widget _fallbackCompanyIcon() {
     return Container(
       width: 56,
       height: 56,
@@ -126,16 +145,12 @@ class JobCard extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: Icon(
-        Icons.business_outlined,
-        color: AppTheme.primaryColor,
-        size: 26,
-      ),
+      child: Icon(Icons.business_outlined, color: AppTheme.primaryColor, size: 26),
     );
   }
 
   Widget _buildMatchScore() {
-    final score = job.matchPercentage;
+    final score = job.matchPercentage.clamp(0, 100);
     final color = _getScoreColor(score);
 
     return SizedBox(
@@ -143,7 +158,6 @@ class JobCard extends StatelessWidget {
       height: 72,
       child: Stack(
         children: [
-          // Animated Progress Circle
           CustomPaint(
             size: const Size(72, 72),
             painter: _CircularProgressPainter(
@@ -153,7 +167,6 @@ class JobCard extends StatelessWidget {
               backgroundColor: color.withValues(alpha: 0.1),
             ),
           ),
-          // Score Display
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -184,9 +197,12 @@ class JobCard extends StatelessWidget {
     );
   }
 
+  // ---------------- Body ----------------
+
   Widget _buildDescription() {
+    final text = job.description.isNotEmpty ? job.description : 'No description provided.';
     return Text(
-      'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+      text,
       style: TextStyle(
         fontSize: 14,
         color: Colors.grey[600],
@@ -208,16 +224,9 @@ class JobCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              // Primary skill (first one) gets special treatment
               _buildSkillChip(job.skills.first, isPrimary: true),
-              // Show up to 2 additional skills
-              ...job.skills
-                  .skip(1)
-                  .take(2)
-                  .map((skill) => _buildSkillChip(skill, isPrimary: false)),
-              // Show count if more skills exist
-              if (job.skills.length > 3)
-                _buildMoreSkillsChip(job.skills.length - 3),
+              ...job.skills.skip(1).take(2).map((s) => _buildSkillChip(s, isPrimary: false)),
+              if (job.skills.length > 3) _buildMoreSkillsChip(job.skills.length - 3),
             ],
           ),
         ),
@@ -229,13 +238,9 @@ class JobCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: isPrimary
-            ? AppTheme.primaryColor.withValues(alpha: 0.12)
-            : Colors.grey[100],
+        color: isPrimary ? AppTheme.primaryColor.withValues(alpha: 0.12) : Colors.grey[100],
         borderRadius: BorderRadius.circular(8),
-        border: isPrimary
-            ? Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3))
-            : null,
+        border: isPrimary ? Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)) : null,
       ),
       child: Text(
         skill,
@@ -244,6 +249,7 @@ class JobCard extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: isPrimary ? AppTheme.primaryColor : Colors.grey[700],
         ),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -257,51 +263,54 @@ class JobCard extends StatelessWidget {
       ),
       child: Text(
         '+$count more',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: Colors.grey[600],
-        ),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[600]),
       ),
     );
   }
 
+  // ---------------- Footer ----------------
+
   Widget _buildFooter() {
     return Row(
       children: [
-        _buildSalaryContainer(),
+        _buildSalaryPill(),
         const Spacer(),
         if (job.isTrending) _buildTrendingBadge(),
       ],
     );
   }
 
-  Widget _buildSalaryContainer() {
+  Widget _buildSalaryPill() {
     final salaryColor = _getSalaryColor();
     final icon = _getSalaryIcon();
-    _getSalaryTrendText();
+    final trendText = _getSalaryTrendText();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: salaryColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: salaryColor.withValues(alpha: 0.2), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '${job.salaryRange}/${job.salaryPeriod}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: salaryColor,
+    final label = job.salaryPeriod.isEmpty
+        ? job.salaryRange
+        : '${job.salaryRange}/${job.salaryPeriod}';
+
+    return Tooltip(
+      message: trendText,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: salaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: salaryColor.withValues(alpha: 0.2), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: salaryColor),
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(width: 6),
-          Icon(icon, size: 16, color: salaryColor),
-        ],
+            const SizedBox(width: 6),
+            Icon(icon, size: 16, color: salaryColor),
+          ],
+        ),
       ),
     );
   }
@@ -312,32 +321,23 @@ class JobCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.warningColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppTheme.warningColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.trending_up_rounded,
-            size: 14,
-            color: AppTheme.warningColor,
-          ),
+          Icon(Icons.trending_up_rounded, size: 14, color: AppTheme.warningColor),
           const SizedBox(width: 4),
           Text(
             'Trending',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.warningColor,
-            ),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.warningColor),
           ),
         ],
       ),
     );
   }
+
+  // ---------------- Logic helpers ----------------
 
   Color _getScoreColor(int score) {
     if (score >= 85) return AppTheme.successColor;
@@ -347,7 +347,9 @@ class JobCard extends StatelessWidget {
   }
 
   Color _getSalaryColor() {
-    final salaryNum = int.tryParse(job.salaryRange.replaceAll(',', '')) ?? 0;
+    // Strip non-digits to handle "₱80,000", "80 000", etc.
+    final numeric = job.salaryRange.replaceAll(RegExp(r'[^0-9]'), '');
+    final salaryNum = int.tryParse(numeric) ?? 0;
     if (salaryNum >= 80000) return AppTheme.successColor;
     if (salaryNum >= 50000) return AppTheme.warningColor;
     return AppTheme.errorColor;
@@ -368,6 +370,8 @@ class JobCard extends StatelessWidget {
   }
 }
 
+// ---------------- Painter ----------------
+
 class _CircularProgressPainter extends CustomPainter {
   final double progress;
   final Color color;
@@ -386,23 +390,20 @@ class _CircularProgressPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width - strokeWidth) / 2;
 
-    // Background circle
     final backgroundPaint = Paint()
       ..color = backgroundColor
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-
     canvas.drawCircle(center, radius, backgroundPaint);
 
-    // Progress arc
     final progressPaint = Paint()
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    const startAngle = -math.pi / 2; 
+    const startAngle = -math.pi / 2;
     final sweepAngle = 2 * math.pi * progress;
 
     canvas.drawArc(

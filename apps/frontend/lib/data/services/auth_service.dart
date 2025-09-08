@@ -4,6 +4,8 @@ import 'package:hiway_app/core/error/exceptions.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/data/models/job_seeker_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
+// ignore: depend_on_referenced_packages
+import 'package:http/http.dart' as http;
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -17,6 +19,124 @@ class AuthService {
   Session? get currentSession => _auth.currentSession;
 
   Stream<AuthState> get authStateStream => _auth.onAuthStateChange;
+
+  // ---------------------------------------------------------------------------
+  // FastAPI matcher access
+  // ---------------------------------------------------------------------------
+
+  // OPTION A ✅: unify with JobService — use the SAME base everywhere
+  // Previously: AppConfig.fastApiBaseUrl
+  String get _apiBase => AppConstants.apiBase; // e.g., http://10.0.2.2:8000
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = currentSession?.accessToken;
+    if (token == null) {
+      throw AuthException('Not authenticated: no access token');
+    }
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+  }
+
+  /// Call FastAPI /match for a given seeker.
+  /// We keep defaults minimal; tweak query params if you need different behavior.
+  Future<void> _runMatcherFastApi({required String jobSeekerId}) async {
+    final uri = Uri.parse('$_apiBase/match?job_seeker_id=$jobSeekerId');
+
+    // 🔎 DEBUG (temporary): confirm API base at runtime
+    // Remove after verifying on device/simulator.
+    // You should see this in your device/emulator logs.
+    // Example expected:
+    //   Android emulator → http://10.0.2.2:8000/match?job_seeker_id=...
+    //   iOS simulator   → http://127.0.0.1:8000/match?job_seeker_id=...
+    //   Physical phone  → http://192.168.x.x:8000/match?job_seeker_id=...
+    // ignore: avoid_print
+    print('[AuthService] calling /match → $uri');
+
+    final res = await http.get(uri, headers: await _authHeaders());
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      // Do not crash login flow; surface as a controlled exception
+      throw Exception('FastAPI /match failed (${res.statusCode}): ${res.body}');
+    }
+  }
+
+  /// Decide whether we need to re-run the matcher:
+  /// - If there is no prior score (no calculated_at) for this seeker
+  /// - OR if the newest job_post (updated_at || created_at) is newer than last score
+  /// - OR if the job seeker profile updated_at is newer than last score
+  Future<bool> _shouldRunMatcher(String jobSeekerId, DateTime seekerUpdatedAt) async {
+    // 1) Get last score time for this seeker
+    DateTime? lastCalculatedAt;
+    try {
+      final lastScoreRow = await _client
+          .from('job_match_scores')
+          .select('calculated_at')
+          .eq('job_seeker_id', jobSeekerId)
+          .order('calculated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (lastScoreRow != null && lastScoreRow['calculated_at'] != null) {
+        lastCalculatedAt = DateTime.parse(lastScoreRow['calculated_at'] as String);
+      }
+    } catch (_) {
+      // Ignore read errors; treat as if no score exists.
+      lastCalculatedAt = null;
+    }
+
+    // If no score exists, we should run.
+    if (lastCalculatedAt == null) return true;
+
+    // 2) Get newest job_post timestamp (prefer updated_at; fallback to created_at)
+    DateTime newestJobPost = DateTime.fromMillisecondsSinceEpoch(0);
+    try {
+      final newestPostRow = await _client
+          .from('job_post')
+          .select('updated_at, created_at')
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      String? ts =
+          (newestPostRow?['updated_at'] as String?) ?? (newestPostRow?['created_at'] as String?);
+      if (ts != null) {
+        newestJobPost = DateTime.parse(ts);
+      }
+    } catch (_) {
+      // If job_post read fails, keep epoch -> means won't force run based on posts.
+    }
+
+    // Compare times
+    if (newestJobPost.isAfter(lastCalculatedAt)) return true;
+    if (seekerUpdatedAt.isAfter(lastCalculatedAt)) return true;
+
+    return false;
+  }
+
+  /// Ensure latest matches on login:
+  /// - Fetch the job seeker profile
+  /// - Decide freshness
+  /// - Run matcher if needed (silently swallow non-fatal errors)
+  Future<void> _ensureFreshMatchesOnLogin() async {
+    try {
+      final seeker = await getJobSeekerProfile();
+      if (seeker == null) return; // not a seeker; nothing to do
+
+      final needsRun = await _shouldRunMatcher(seeker.jobSeekerId, seeker.updatedAt);
+      if (needsRun) {
+        await _runMatcherFastApi(jobSeekerId: seeker.jobSeekerId);
+      }
+    } catch (e) {
+      // Do not block the login UX if matcher fails;
+      // you may log this to your telemetry instead.
+      // print('[matcher] skipped on login: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auth & profile methods (existing)
+  // ---------------------------------------------------------------------------
 
   // Sign in with email and password
   Future<AuthResponse> signInWithEmail({
@@ -32,6 +152,9 @@ class AuthService {
       if (response.user == null) {
         throw AuthException('Login failed - no user returned');
       }
+
+      // 🔸 After successful login, ensure matches exist & are fresh
+      await _ensureFreshMatchesOnLogin();
 
       return response;
     } on AuthException catch (e) {
@@ -49,8 +172,7 @@ class AuthService {
       final response = await _auth.signUp(
         email: email.trim(),
         password: password,
-        emailRedirectTo:
-            null, // This will use the default redirect URL from dashboard
+        emailRedirectTo: null, // default redirect from Supabase dashboard
       );
 
       if (response.user == null) {
@@ -93,10 +215,10 @@ class AuthService {
       email: email,
       phone: phone,
       address: address,
-      skills: [],
-      experience: [],
-      education: [],
-      licensesCertifications: [],
+      skills: const [],
+      experience: const [],
+      education: const [],
+      licensesCertifications: const [],
     );
   }
 

@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Hiway';
+  static const String appName = 'Hi-Way';
 
   // User Roles
   static const String jobSeekerRole = 'job_seeker';
@@ -57,4 +57,7 @@ class AppConstants {
   // Table Names in Database
   static const String jobSeekerTable = 'job_seeker';
   static const String employerTable = 'employer';
+
+  // API Base (used by JobService to call FastAPI backend)
+  static const String apiBase = 'http://10.0.2.2:8000';
 }
