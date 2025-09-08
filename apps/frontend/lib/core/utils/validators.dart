@@ -122,6 +122,7 @@ class Validators {
     final digitsOnly = trimmedValue.replaceAll(RegExp(r'[^0-9+]'), '');
 
     // Philippine phone number validation
+    // Should be 11 digits (09xxxxxxxxx) or 13 digits (+639xxxxxxxxx)
     if (digitsOnly.startsWith('+63')) {
       if (digitsOnly.length != 13) {
         return 'Please enter a valid Philippine phone number (+639xxxxxxxxx)';
@@ -137,8 +138,7 @@ class Validators {
       return 'Please enter a valid Philippine phone number (09xxxxxxxxx or +639xxxxxxxxx)';
     }
 
-    return null;
-  }
+    return null;}
 
   static String? validateCompanyName(String? value) {
     if (value == null || value.isEmpty) {

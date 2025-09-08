@@ -14,7 +14,12 @@ for p in [ROOT / ".env", BACKEND / ".env"]:
         load_dotenv(p, override=False)
 
 # ---- Import routers AFTER env is loaded ----
-from apps.backend.api.endpoints import matcher, scraper, orchestrator  # noqa: E402
+from apps.backend.api.endpoints import (
+    matcher,
+    scraper,
+    orchestrator,
+    applications,  # <-- NEW
+)  # noqa: E402
 
 # ---- App config ----
 app = FastAPI(
@@ -39,6 +44,9 @@ app.include_router(matcher.router, prefix="", tags=["matcher"])
 # Keep the others as-is
 app.include_router(scraper.router, prefix="/scraper", tags=["scraper"])
 app.include_router(orchestrator.router, prefix="/api", tags=["Orchestrator"])
+
+# Applications API (router already uses prefix="/applications")
+app.include_router(applications.router)
 
 # ---- Healthcheck ----
 @app.get("/healthz")

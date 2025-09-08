@@ -1,5 +1,4 @@
 // lib/data/services/auth_service.dart
-import 'dart:convert';
 import 'package:hiway_app/core/config/app_config.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/core/error/exceptions.dart';
