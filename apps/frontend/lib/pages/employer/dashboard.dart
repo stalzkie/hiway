@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
@@ -97,6 +98,19 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await _authService.signOut();
+      if (mounted) {
+        Navigator.of(context).pushNamed(AppConstants.loginRoute);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override

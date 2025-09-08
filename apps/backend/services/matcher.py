@@ -38,6 +38,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL   = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
 
+# ---------------------- Queue Config ----------------------
+EMBED_QUEUE_TABLE_SEEKER = os.getenv("EMBED_QUEUE_TABLE_SEEKER", "embedding_queue")
+EMBED_QUEUE_TABLE_POST   = os.getenv("EMBED_QUEUE_TABLE_POST", "embedding_queue_post")
+# MUST be one of your DB CHECK values: insert | update | manual | backfill
+EMBED_QUEUE_REASON_DEFAULT = os.getenv("EMBED_QUEUE_REASON_DEFAULT", "insert")
+AUTO_ENQUEUE_STALE_POSTS = os.getenv("AUTO_ENQUEUE_STALE_POSTS", "1") == "1"
+
+_ALLOWED_REASONS = {"insert", "update", "manual", "backfill"}
+
 # ---------------------- Lazy client creation ----------------------
 _PC = None
 _INDEX = None
@@ -76,6 +85,66 @@ class _SBProxy:
         return getattr(sb, name)
 
 SB = _SBProxy()
+
+# ---------------------- Enqueue Helpers (VALID reasons) ----------------------
+def _pick_reason_for_seeker(row: dict) -> str:
+    """
+    If pinecone_id or embedding_checksum is missing => 'insert', else 'update'.
+    """
+    reason = "insert" if (not row.get("pinecone_id") or not row.get("embedding_checksum")) else "update"
+    return reason if reason in _ALLOWED_REASONS else EMBED_QUEUE_REASON_DEFAULT
+
+def _ensure_seeker_enqueued(job_seeker_id: str) -> None:
+    """
+    If a seeker is missing pinecone_id or embedding_checksum, enqueue them for embedding.
+    Always includes a valid non-null 'reason' that satisfies your DB CHECK constraint.
+    """
+    try:
+        _, sb = _get_clients()
+        resp = (
+            sb.table("job_seeker")
+            .select("pinecone_id, embedding_checksum, search_document")
+            .eq("job_seeker_id", job_seeker_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            return
+        reason = _pick_reason_for_seeker(rows[0])
+        if reason not in _ALLOWED_REASONS:
+            reason = "insert"
+        sb.table(EMBED_QUEUE_TABLE_SEEKER).insert({
+            "job_seeker_id": job_seeker_id,
+            "reason": reason,  # 👈 valid & NOT NULL
+        }).execute()
+    except Exception as e:
+        print(f"[WARN] _ensure_seeker_enqueued failed: {e}")
+
+def _enqueue_stale_posts_if_any(limit: int = 200) -> None:
+    """
+    Opportunistically enqueue job_posts that are missing pinecone_id or embedding_checksum.
+    Always includes a valid non-null 'reason' ('insert').
+    """
+    try:
+        _, sb = _get_clients()
+        missing_posts = (
+            sb.table("job_post")
+            .select("job_post_id")
+            .or_("pinecone_id.is.null,embedding_checksum.is.null")
+            .limit(limit)
+            .execute()
+        )
+        for r in (missing_posts.data or []):
+            try:
+                sb.table(EMBED_QUEUE_TABLE_POST).insert({
+                    "job_post_id": r["job_post_id"],
+                    "reason": "insert",  # 👈 valid & NOT NULL
+                }).execute()
+            except Exception as inner:
+                print(f"[WARN] enqueue post {r.get('job_post_id')} failed: {inner}")
+    except Exception as e:
+        print(f"[WARN] _enqueue_stale_posts_if_any failed: {e}")
 
 # ---------------------- Helpers ----------------------
 def _effective_weights(weights: Optional[Dict[str, float]]) -> Dict[str, float]:
@@ -121,15 +190,12 @@ def get_seeker_vectors(job_seeker_id: str, scopes: Iterable[str] = VALID_SCOPES)
     # Normalize all possible shapes
     vectors_obj = getattr(fetch_res, "vectors", None)
     if isinstance(vectors_obj, dict):
-        # {id -> Vector or dict}
         for vid, v in vectors_obj.items():
             _add(vid, v)
     elif isinstance(vectors_obj, list):
-        # [Vector or dict]
         for v in vectors_obj:
             _add(None, v)
     elif isinstance(fetch_res, dict):
-        # {"vectors": {...}} or {"vectors": [...]}
         v = fetch_res.get("vectors", {})
         if isinstance(v, dict):
             for vid, vv in v.items():
@@ -235,10 +301,6 @@ def _stringify(x: Any) -> str:
         return str(x)
 
 def _get_seeker_text(job_seeker_id: str) -> str:
-    """
-    Build a readable text description of the seeker's profile for cross-encoder input.
-    Falls back gracefully if some columns are missing.
-    """
     _, SB_real = _get_clients()
     cols = "full_name, email, skills, experience, education, licenses_certifications"
     try:
@@ -270,9 +332,6 @@ def _get_seeker_text(job_seeker_id: str) -> str:
     return " | ".join(parts)
 
 def _get_post_text(post_row: Dict[str, Any]) -> str:
-    """
-    Build a readable text description of the job post for cross-encoder input.
-    """
     parts: List[str] = []
     title = post_row.get("job_title") or post_row.get("title") or ""
     company = post_row.get("company") or post_row.get("employer") or ""
@@ -292,10 +351,6 @@ def _get_post_text(post_row: Dict[str, Any]) -> str:
 
 # ---------------------- Cross-encoder (lazy) ----------------------
 def _get_cross_encoder():
-    """
-    Lazy-load the sentence-transformers CrossEncoder.
-    Returns None if unavailable to avoid hard dependency.
-    """
     global _CE
     if _CE is not None:
         return _CE
@@ -306,7 +361,6 @@ def _get_cross_encoder():
         _CE = CrossEncoder(RERANK_MODEL)  # downloads on first use
         return _CE
     except Exception:
-        # If torch or the model isn't available, silently disable reranking
         return None
 
 def _minmax_to_0_100(vals: List[float]) -> List[float]:
@@ -323,23 +377,18 @@ def _apply_reranker(
     ranked: List[Dict[str, Any]],
     include_job_details: bool,
 ) -> List[Dict[str, Any]]:
-    """
-    Re-score top candidates with a cross-encoder and blend with Pinecone confidence.
-    """
     if not RERANK_ENABLE:
         return ranked
 
     ce = _get_cross_encoder()
     if ce is None:
-        return ranked  # gracefully skip
+        return ranked
 
     if not ranked:
         return ranked
 
-    # Ensure we have job_post rows to build text; fetch if necessary.
     _, SB_real = _get_clients()
     if include_job_details:
-        # best-effort: details may already be attached by caller rank_posts_for_seeker
         has_details_for_all = all("job_post" in r and r["job_post"] for r in ranked)
     else:
         has_details_for_all = False
@@ -358,10 +407,8 @@ def _apply_reranker(
 
     seeker_text = _get_seeker_text(job_seeker_id)
     if not seeker_text:
-        # If we can't build seeker text, skip reranking
         return ranked
 
-    # Create pairs for the top N
     top = ranked[: max(1, RERANK_TOP_K)]
     pairs: List[Tuple[str, str]] = []
     for r in top:
@@ -372,21 +419,17 @@ def _apply_reranker(
         pairs.append((seeker_text, post_text))
 
     try:
-        # Predict returns higher-is-better relevance scores
         scores = ce.predict(pairs).tolist()  # type: ignore[attr-defined]
     except Exception:
-        return ranked  # silently skip on runtime error
+        return ranked
 
-    # Normalize 0..100
     scores_norm = _minmax_to_0_100(scores)
 
-    # Blend with Pinecone confidence
     for r, rr in zip(top, scores_norm):
         pine = float(r.get("confidence", 0.0))
         blended = RERANK_ALPHA * pine + (1.0 - RERANK_ALPHA) * rr
         r["confidence"] = round(float(blended), 2)
 
-    # Re-sort entire list (only top part changed)
     ranked.sort(key=lambda d: d["confidence"], reverse=True)
     return ranked
 
@@ -400,11 +443,15 @@ def rank_posts_for_seeker(
 ) -> List[Dict[str, Any]]:
     """Rank job posts for a seeker by aggregating cosine similarities across sections,
     then (optionally) refine with a BERT/miniLM cross-encoder reranker."""
+    if AUTO_ENQUEUE_STALE_POSTS:
+        _enqueue_stale_posts_if_any()
+
     weights_eff = _effective_weights(weights)
 
     # 1) Seeker vectors
     seeker_vecs = get_seeker_vectors(job_seeker_id)
     if not seeker_vecs:
+        _ensure_seeker_enqueued(job_seeker_id)  # enqueue with valid reason
         return []
 
     # 2) Query posts per section
@@ -430,14 +477,12 @@ def rank_posts_for_seeker(
             if include_job_details:
                 r["job_post"] = details_map.get(r["job_post_id"])
             else:
-                # keep it available for reranker only (not returned if include_job_details=False)
                 r.setdefault("job_post", details_map.get(r["job_post_id"]))
 
-    # 5) Optional cross-encoder rerank (blended confidence)
+    # 5) Optional cross-encoder rerank
     ranked = _apply_reranker(job_seeker_id, ranked, include_job_details)
 
-    # 6) If we fetched job_post just for reranker but the caller didn't request it,
-    # strip it to keep the payload lean.
+    # 6) Strip job_post if not requested
     if not include_job_details:
         for r in ranked:
             r.pop("job_post", None)
@@ -445,7 +490,6 @@ def rank_posts_for_seeker(
     return ranked
 
 def get_seeker_id_by_email(email: str) -> Optional[str]:
-    """Resolve a job_seeker_id from a seeker email. Returns None if not found."""
     _, SB_real = _get_clients()
     resp = SB_real.table("job_seeker").select("job_seeker_id").eq("email", email).limit(1).execute()
     if not resp.data:
@@ -459,7 +503,6 @@ def rank_posts_for_seeker_by_email(
     include_job_details: bool = False,
     min_sections: int = 1,
 ) -> List[Dict[str, Any]]:
-    """Convenience wrapper: look up the seeker by email, then rank posts."""
     js_id = get_seeker_id_by_email(email)
     if not js_id:
         return []
@@ -472,7 +515,7 @@ def rank_posts_for_seeker_by_email(
     )
 
 # ======================================================================
-#              ENRICHMENT (LLM explanations) — moved to services
+#              ENRICHMENT (LLM explanations)
 # ======================================================================
 
 def _select_provider() -> str:
@@ -480,7 +523,6 @@ def _select_provider() -> str:
         return "gemini"
     if LLM_PROVIDER == "openai" and OPENAI_API_KEY:
         return "openai"
-    # auto
     if GEMINI_API_KEY:
         return "gemini"
     if OPENAI_API_KEY:
@@ -566,11 +608,6 @@ def _fetch_seeker_skills(job_seeker_id: str) -> List[str]:
     return _coerce_to_list(raw)
 
 def _fetch_seeker_context(job_seeker_id: str) -> Dict[str, Any]:
-    """
-    Schema-accurate for your `job_seeker` table:
-      skills (jsonb), experience (jsonb), education (jsonb),
-      licenses_certifications (jsonb), full_name, email
-    """
     _, SB_real = _get_clients()
     projection = "skills, experience, education, licenses_certifications, full_name, email"
 
@@ -582,7 +619,7 @@ def _fetch_seeker_context(job_seeker_id: str) -> Dict[str, Any]:
             "licenses_certifications": _coerce_to_list(row.get("licenses_certifications")),
             "full_name": (row.get("full_name") or ""),
             "email": (row.get("email") or ""),
-            # Keys kept for prompt compatibility (not in schema)
+            # Prompt compatibility keys
             "summary": "",
             "projects": [],
             "achievements": [],
@@ -601,7 +638,6 @@ def _fetch_seeker_context(job_seeker_id: str) -> Dict[str, Any]:
             return {}
         return _normalize(resp.data[0] or {})
     except Exception:
-        # Minimal safe fallback
         return {
             "skills": [],
             "experience_text": "",
@@ -616,9 +652,6 @@ def _fetch_seeker_context(job_seeker_id: str) -> Dict[str, Any]:
         }
 
 def _build_job_context(job_post_row: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Schema-accurate for your `job_post` table.
-    """
     if not job_post_row:
         return {}
     return {
@@ -752,8 +785,6 @@ def match_and_enrich(
       2) attach required-vs-seeker skill analysis
       3) (optional) LLM per-skill explanations + overall summary
     """
-    # 1) Rank posts (always fetch details here so we can build contexts;
-    #                we'll strip them later if include_details=False)
     ranked = rank_posts_for_seeker(
         job_seeker_id=job_seeker_id,
         top_k_per_section=top_k_per_section,
@@ -765,14 +796,12 @@ def match_and_enrich(
     if not ranked:
         return []
 
-    # 2) Seeker data
     seeker_skills = _fetch_seeker_skills(job_seeker_id)
     seeker_ctx = _fetch_seeker_context(job_seeker_id) if include_explanations else {}
 
     # Pull analyzer here to avoid circular imports at module import time
     from .skill_utils import analyze_required_vs_seeker
     from .data_storer import persist_matcher_results
-
 
     out: List[Dict[str, Any]] = []
     for r in ranked:
@@ -804,7 +833,6 @@ def match_and_enrich(
 
         r["analysis"] = analysis
 
-        # Strip details if caller didn't request them
         if not include_details:
             r = dict(r)  # shallow copy before mutating
             r.pop("job_post", None)

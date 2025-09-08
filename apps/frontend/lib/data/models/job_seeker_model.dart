@@ -185,6 +185,10 @@ class JobSeekerModel {
     );
   }
 
+  get uuid => null;
+
+  get userId => null;
+
   @override
   String toString() {
     return 'JobSeekerModel{jobSeekerId: $jobSeekerId, fullName: $fullName, email: $email}';

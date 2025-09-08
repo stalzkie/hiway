@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Hiway';
+  static const String appName = 'Hi-Way';
 
   // User Roles
   static const String jobSeekerRole = 'job_seeker';
@@ -60,6 +60,4 @@ class AppConstants {
 
   // API Base (used by JobService to call FastAPI backend)
   static const String apiBase = 'http://10.0.2.2:8000';
-  // For mobile testing on a real device, replace with LAN IP:
-  // static const String apiBase = 'http://192.168.1.5:8000';
 }
