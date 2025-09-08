@@ -1,9 +1,16 @@
+// ui/dashboard.dart (JobSeekerDashboard) — focused to ensure job posts appear
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/data/services/job_service.dart';
 import 'package:hiway_app/data/models/job_seeker_model.dart';
+import 'package:hiway_app/data/models/job_model.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:flutter/services.dart';
+import 'package:hiway_app/widgets/common/app_theme.dart';
+import 'package:hiway_app/widgets/job_seeker/bottom_nav.dart';
+import 'package:hiway_app/widgets/job_seeker/job_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class JobSeekerDashboard extends StatefulWidget {
   const JobSeekerDashboard({super.key});
@@ -14,34 +21,82 @@ class JobSeekerDashboard extends StatefulWidget {
 
 class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   final AuthService _authService = AuthService();
+  final JobService _jobService = JobService(apiBase: AppConstants.apiBase);
+
+  final TextEditingController _searchController = TextEditingController();
+
   JobSeekerModel? _profile;
+  List<JobModel> _recommendedJobs = [];
   bool _isLoading = true;
+  bool _isLoadingJobs = true;
+  int _currentNavIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _loadDashboardData();
   }
 
-  Future<void> _loadProfile() async {
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Only use jobSeekerId. The /match endpoint expects job_seeker_id (UUID).
+  String? _seekerId() => _profile?.jobSeekerId;
+
+  Future<void> _loadDashboardData() async {
     try {
       final profile = await _authService.getJobSeekerProfile();
-      if (mounted) {
-        setState(() {
-          _profile = profile;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _isLoading = false;
+      });
+
+      await _loadRecommendedOrFallback();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isLoadingJobs = false;
+      });
     }
   }
 
-  Future<void> _signOut() async {
+  /// Try personalized from /match; if empty/error, fallback to generic Supabase list.
+  Future<void> _loadRecommendedOrFallback() async {
+    setState(() => _isLoadingJobs = true);
+
+    List<JobModel> jobs = const <JobModel>[];
+    try {
+      final seekerId = _seekerId();
+      if (seekerId != null && seekerId.isNotEmpty) {
+        jobs = await _jobService.getRecommendedJobs(jobSeekerId: seekerId);
+      }
+    } catch (_) {
+      // swallow and fallback below
+    }
+
+    if (jobs.isEmpty) {
+      try {
+        jobs = await _jobService.getAllJobs(limit: 20);
+      } catch (_) {
+        // still empty
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _recommendedJobs = jobs;
+      _isLoadingJobs = false;
+    });
+  }
+
+  // Unpersonalized search/browse list (explicit user search)
+  Future<void> _searchJobs({String? query}) async {
+    setState(() => _isLoadingJobs = true);
     try {
       await _authService.signOut();
       if (mounted) {
@@ -50,8 +105,24 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      final jobs = await _jobService.getAllJobs(
+        searchQuery: (query ?? _searchController.text).trim(),
+        limit: 50,
       );
+      if (!mounted) return;
+      setState(() {
+        _recommendedJobs = jobs;
+        _isLoadingJobs = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingJobs = false);
     }
+  }
+
+  Future<void> _refresh() async {
+    _searchController.clear();
+    await _loadRecommendedOrFallback();
   }
 
   @override
@@ -267,47 +338,48 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      body: Column(
+        children: [
+          _buildHeroSection(),
+          Expanded(child: _buildMainContent()),
+        ],
+      ),
+      bottomNavigationBar: JobSeekerBottomNav(
+        currentIndex: _currentNavIndex,
+        onTap: (index) {
+          setState(() => _currentNavIndex = index);
+          _handleBottomNavTap(index);
+        },
       ),
     );
   }
 
-  Widget _buildActionCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildHeroSection() {
+    return Container(
+      height: 280,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryColor,
+            AppTheme.secondaryColor,
+            AppTheme.primaryColor.withOpacity(0.8), // fixed
+          ],
+        ),
+      ),
+      child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 32, color: Theme.of(context).primaryColor),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
+              _buildHeader(),
+              const SizedBox(height: 24),
+              _buildWelcomeSection(),
+              const Spacer(),
+              _buildSearchBar(),
             ],
           ),
         ),
@@ -315,35 +387,257 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     );
   }
 
-  Widget _buildProfileItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15), // fixed
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.work_outline, color: Colors.white, size: 24),
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: () => _handleBottomNavTap(2),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15), // fixed
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3), // fixed
+                width: 1,
+              ),
+            ),
+            child: const Icon(Icons.person_outline, color: Colors.white, size: 24),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeSection() {
+    final greeting = _getGreeting();
+    final userName = (_profile?.fullName ?? 'there').split(' ').first; // fixed
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$greeting, $userName',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Let\'s find your perfect job',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9), // fixed
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15), // fixed
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search jobs, companies, skills...',
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+          ),
+          prefixIcon: Container(
+            padding: const EdgeInsets.all(15),
+            child: Icon(
+              Icons.search_rounded,
+              color: Colors.grey.shade600,
+              size: 20,
+            ),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600, size: 20),
+            onPressed: () => _searchJobs(),
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+        ),
+        textInputAction: TextInputAction.search,
+        onSubmitted: (q) => _searchJobs(query: q),
+      ),
+    );
+  }
+
+  Widget _buildMainContent() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+      ),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        // IMPORTANT: child must be scrollable even when loading/empty (see _buildJobsList)
+        child: Column(
+          children: [
+            _buildSectionHeader(),
+            Expanded(child: _buildJobsList()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.grey[600]),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(value, style: Theme.of(context).textTheme.bodyMedium),
-              ],
+          Text(
+            'Fitting for you',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.darkColor,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: () async {
+              await _searchJobs(); // show generic list
+            },
+            child: Text(
+              'View all',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryColor,
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildJobsList() {
+    // Always return a scrollable to keep RefreshIndicator working
+    if (_isLoadingJobs) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        children: const [
+          Center(child: LoadingIndicator(size: 32)),
+        ],
+      );
+    }
+
+    if (_recommendedJobs.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+        children: [ _buildEmptyState() ],
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      itemCount: _recommendedJobs.length,
+      itemBuilder: (context, index) {
+        final job = _recommendedJobs[index];
+        return JobCard(job: job, onTap: () => _handleJobTap(job));
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1), // fixed
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.work_outline_rounded, size: 64, color: AppTheme.primaryColor),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No jobs found',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.darkColor),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try a different search term or pull to refresh',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.4),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(onPressed: _refresh, child: const Text('Refresh')),
+        ],
+      ),
+    );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  void _handleJobTap(JobModel job) {
+    debugPrint('Tapped on job: ${job.title}');
+  }
+
+  void _handleBottomNavTap(int index) {
+    switch (index) {
+      case 0:
+        break;
+      case 1:
+        Navigator.pushNamed(context, AppConstants.roadmapRoute);
+        break;
+      case 2:
+        Navigator.pushNamed(context, AppConstants.profileRoute);
+        break;
+    }
   }
 }

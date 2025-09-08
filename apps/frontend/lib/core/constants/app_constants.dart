@@ -14,6 +14,7 @@ class AppConstants {
   static const String jobSeekerDashboardRoute = '/job-seeker-dashboard';
   static const String employerDashboardRoute = '/employer-dashboard';
   static const String profileRoute = '/profile';
+  static const String roadmapRoute = '/roadmap';
 
   // Form Field
   static const String emailField = 'email';
@@ -56,4 +57,9 @@ class AppConstants {
   // Table Names in Database
   static const String jobSeekerTable = 'job_seeker';
   static const String employerTable = 'employer';
+
+  // API Base (used by JobService to call FastAPI backend)
+  static const String apiBase = 'http://10.0.2.2:8000';
+  // For mobile testing on a real device, replace with LAN IP:
+  // static const String apiBase = 'http://192.168.1.5:8000';
 }

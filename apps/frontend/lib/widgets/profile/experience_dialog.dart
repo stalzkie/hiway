@@ -51,15 +51,6 @@ class _ExperienceDialogState extends State<ExperienceDialog> {
         _companyController.text.trim().isNotEmpty &&
         _startController.text.trim().isNotEmpty &&
         _endController.text.trim().isNotEmpty;
-
-    print(
-      'DEBUG: Validation - Title: "${_titleController.text.trim()}", '
-      'Company: "${_companyController.text.trim()}", '
-      'Start: "${_startController.text.trim()}", '
-      'End: "${_endController.text.trim()}", '
-      'Valid: $isValidResult',
-    );
-
     return isValidResult;
   }
 
@@ -154,8 +145,6 @@ class _ExperienceDialogState extends State<ExperienceDialog> {
         ElevatedButton(
           onPressed: _isValid
               ? () {
-                  print('DEBUG: Add button pressed, valid: $_isValid');
-                  print('DEBUG: Experience data: $_experienceData');
                   Navigator.pop(context, _experienceData);
                 }
               : null,
