@@ -1,4 +1,3 @@
-// services/job_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -184,7 +183,7 @@ class JobService {
         .maybeSingle();
 
     if (row == null) return null;
-    return JobModel.fromJson(row as Map<String, dynamic>);
+    return JobModel.fromJson(row);
   }
 
   // Stubs for later

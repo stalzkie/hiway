@@ -1,26 +1,20 @@
-// models/job_model.dart
 class JobModel {
   final String id;
   final String title;
   final String company;
   final String location;
-
-  /// UI expects plain strings for salary.
-  /// `salaryRange` = numeric string (e.g., "80000")
-  /// `salaryPeriod` = unit (e.g., "monthly", "mo", "yr")
   final String salaryRange;
   final String salaryPeriod;
 
   final List<String> skills;
   final String description;
   final String jobType;
-  final String experience; // display string
+  final String experience; 
   final DateTime postedDate;
 
-  // Optional / derived
   final DateTime? deadline;
   final String? companyLogo;
-  final int matchPercentage; // 0..100
+  final int matchPercentage; 
   final bool isTrending;
 
   const JobModel({
