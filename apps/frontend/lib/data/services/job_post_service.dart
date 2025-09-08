@@ -115,10 +115,11 @@ class JobPostService {
       if (jobLocation != null) updateData['job_location'] = jobLocation.trim();
       if (salary != null) updateData['salary'] = salary.toJson();
       if (jobSkills != null) updateData['job_skills'] = jobSkills;
-      if (jobExperience != null)
+      if (jobExperience != null) {
         updateData['job_experience'] = jobExperience
             .map((e) => e.toJson())
             .toList();
+      }
       if (jobEducation != null) updateData['job_education'] = jobEducation;
       if (jobLicensesCertifications != null) {
         updateData['job_licenses_certifications'] = jobLicensesCertifications;

@@ -39,23 +39,13 @@ class _EmployerDashboardState extends State<EmployerDashboard> {
         setState(() {
           _isLoading = false;
         });
-        _showErrorSnackBar(e.toString());
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
 
-  /// Show error message - DRY principle
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  /// Handle navigation actions - following KISS principle
   void _handlePostJob() {
     // Directly navigate to job creation form
     Navigator.push(

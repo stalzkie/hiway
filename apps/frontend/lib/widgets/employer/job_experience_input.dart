@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/data/models/job_experience_model.dart';
 
-/// Widget for managing job experience requirements
 class JobExperienceInput extends StatefulWidget {
   final List<JobExperienceModel> initialExperience;
   final Function(List<JobExperienceModel>) onChanged;
@@ -176,8 +175,9 @@ class _ExperienceEntryState extends State<_ExperienceEntry> {
                   onChanged: (_) => _updateExperience(),
                   validator: (value) {
                     if (value?.isEmpty ?? true) return 'Years required';
-                    if (int.tryParse(value!) == null)
+                    if (int.tryParse(value!) == null) {
                       return 'Enter valid number';
+                    }
                     return null;
                   },
                 ),

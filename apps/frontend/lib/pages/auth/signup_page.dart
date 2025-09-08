@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
+import 'package:hiway_app/core/utils/error_messages.dart';
 import 'package:hiway_app/core/utils/validators.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/pages/auth/email_verification_page.dart';
 import 'package:hiway_app/pages/auth/profile_setup_page.dart';
+import 'package:hiway_app/widgets/common/error_display_widget.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 
 class SignupPage extends StatefulWidget {
@@ -68,7 +70,7 @@ class _SignupPageState extends State<SignupPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceAll('AuthException: ', '');
+          _errorMessage = ErrorMessages.getSignupErrorMessage(e);
         });
       }
     } finally {
@@ -115,30 +117,13 @@ class _SignupPageState extends State<SignupPage> {
 
                   const SizedBox(height: 48),
 
+                  // Error Display
                   if (_errorMessage != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        border: Border.all(color: Colors.red.shade200),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error,
-                            color: Colors.red.shade600,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade600),
-                            ),
-                          ),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: ErrorDisplayWidget(
+                        error: _errorMessage!,
+                        onDismiss: () => setState(() => _errorMessage = null),
                       ),
                     ),
 

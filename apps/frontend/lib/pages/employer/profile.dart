@@ -14,7 +14,8 @@ class EmployerProfilePage extends StatefulWidget {
   State<EmployerProfilePage> createState() => _EmployerProfilePageState();
 }
 
-class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTickerProviderStateMixin {
+class _EmployerProfilePageState extends State<EmployerProfilePage>
+    with SingleTickerProviderStateMixin {
   final AuthService _authService = AuthService();
   late TabController _tabController;
   EmployerModel? _profile;
@@ -48,7 +49,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
         setState(() {
           _isLoading = false;
         });
-        _showErrorSnackBar(e.toString());
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -64,11 +67,7 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: LoadingIndicator(size: 48),
-        ),
-      );
+      return const Scaffold(body: Center(child: LoadingIndicator(size: 48)));
     }
 
     return Scaffold(
@@ -235,7 +234,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
           // Security Overview Card
           Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -262,18 +263,20 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
                           children: [
                             Text(
                               'Security Status',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.darkColor,
-                              ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.darkColor,
+                                  ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Your account is secure',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.successColor,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: AppTheme.successColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                             ),
                           ],
                         ),
@@ -310,7 +313,10 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
                 subtitle: 'Add extra security to your account',
                 onTap: _setup2FA,
                 trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.warningColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -394,11 +400,18 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
         const SizedBox(height: 12),
         Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(
             children: items
                 .map((item) => _buildSettingsItem(item))
-                .expand((widget) => [widget, if (widget != items.last) const Divider(height: 1)])
+                .expand(
+                  (widget) => [
+                    widget,
+                    if (widget != items.last) const Divider(height: 1),
+                  ],
+                )
                 .toList(),
           ),
         ),
@@ -412,7 +425,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: (item.textColor ?? AppTheme.primaryColor).withValues(alpha: 0.1),
+          color: (item.textColor ?? AppTheme.primaryColor).withValues(
+            alpha: 0.1,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
@@ -434,7 +449,8 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
           color: AppTheme.darkColor.withValues(alpha: 0.6),
         ),
       ),
-      trailing: item.trailing ??
+      trailing:
+          item.trailing ??
           Icon(
             Icons.chevron_right,
             color: AppTheme.darkColor.withValues(alpha: 0.4),
@@ -448,17 +464,22 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
   void _uploadDocuments() => _showFeatureComingSoon('Upload Documents');
   void _editCompanyInfo() => _showFeatureComingSoon('Edit Company Info');
   void _editContactInfo() => _showFeatureComingSoon('Edit Contact Info');
-  void _editBusinessAddress() => _showFeatureComingSoon('Edit Business Address');
-  void _configureNotifications() => _showFeatureComingSoon('Configure Notifications');
-  void _configureEmailNotifications() => _showFeatureComingSoon('Configure Email Notifications');
-  void _configureProfileVisibility() => _showFeatureComingSoon('Configure Profile Visibility');
+  void _editBusinessAddress() =>
+      _showFeatureComingSoon('Edit Business Address');
+  void _configureNotifications() =>
+      _showFeatureComingSoon('Configure Notifications');
+  void _configureEmailNotifications() =>
+      _showFeatureComingSoon('Configure Email Notifications');
+  void _configureProfileVisibility() =>
+      _showFeatureComingSoon('Configure Profile Visibility');
   void _exportData() => _showFeatureComingSoon('Export Data');
   void _changePassword() => _showFeatureComingSoon('Change Password');
   void _setup2FA() => _showFeatureComingSoon('Setup 2FA');
   void _viewActiveSessions() => _showFeatureComingSoon('View Active Sessions');
   void _signOutAllDevices() => _showFeatureComingSoon('Sign Out All Devices');
   void _viewLoginHistory() => _showFeatureComingSoon('View Login History');
-  void _configureSecurityAlerts() => _showFeatureComingSoon('Configure Security Alerts');
+  void _configureSecurityAlerts() =>
+      _showFeatureComingSoon('Configure Security Alerts');
 
   void _toggleNotifications(bool value) {
     // TODO: Implement notification toggle
@@ -491,7 +512,9 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
               Navigator.pop(context);
               _showFeatureComingSoon('Delete Account');
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.errorColor,
+            ),
             child: const Text('Delete Account'),
           ),
         ],
@@ -503,16 +526,6 @@ class _EmployerProfilePageState extends State<EmployerProfilePage> with SingleTi
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$feature feature coming soon!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppTheme.errorColor,
         behavior: SnackBarBehavior.floating,
       ),
     );
