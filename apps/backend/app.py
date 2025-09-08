@@ -6,12 +6,28 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # ---- Load environment variables early ----
 # Try repo root and backend folder
-ROOT = Path(__file__).resolve().parents[2]   # hiway_app/
-BACKEND = Path(__file__).resolve().parents[1]
+def _load_local_env_if_present() -> None:
+    """
+    In production (Railway), env vars come from the platform, no .env file exists.
+    Silently load a local .env only if present. Never override platform env.
+    """
+    # If you set RUNTIME_ENV=production on Railway, skip loading files
+    if os.getenv("RUNTIME_ENV", "").lower() == "production":
+        return
 
-for p in [ROOT / ".env", BACKEND / ".env"]:
-    if p.exists():
-        load_dotenv(p, override=False)
+    candidates = [
+        Path(__file__).resolve().parents[2] / ".env",      # repo root
+        Path(__file__).resolve().parents[1] / ".env",      # apps/backend/.env
+    ]
+    for p in candidates:
+        if p.exists():
+            load_dotenv(p, override=False)
+            print(f"[DIAG] loaded .env: {p}")  # optional
+            return
+    # No print in prod; keep quiet if not found
+    # print(f"[DIAG] no .env found (tried={[str(c) for c in candidates]})")
+
+_load_local_env_if_present()
 
 # ---- Import routers AFTER env is loaded ----
 from apps.backend.api.endpoints import (
