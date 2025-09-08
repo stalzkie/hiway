@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Hiway';
+  static const String appName = 'Hi-Way';
 
   // User Roles
   static const String jobSeekerRole = 'job_seeker';

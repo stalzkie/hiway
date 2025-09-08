@@ -82,154 +82,149 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
-      body: LoadingOverlay(
-        isLoading: _isLoading,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 16),
-
-                  Text(
-                    'Join ${AppConstants.appName} Today!',
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    'Create your account to get started',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 48),
-
-                  if (_errorMessage != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        border: Border.all(color: Colors.red.shade200),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error,
-                            color: Colors.red.shade600,
-                            size: 20,
+    return WillPopScope(
+      onWillPop: () async {
+        // Instead of exiting, go to login page
+        Navigator.of(context).pop();
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
+        body: LoadingOverlay(
+          isLoading: _isLoading,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 16),
+                    Text(
+                      'Join ${AppConstants.appName} Today!',
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade600),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Create your account to get started',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 48),
+                    if (_errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          border: Border.all(color: Colors.red.shade200),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error,
+                              color: Colors.red.shade600,
+                              size: 20,
                             ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(color: Colors.red.shade600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Email Field
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address *',
+                        prefixIcon: Icon(Icons.email),
+                      ),
+                      validator: Validators.validateEmail,
+                      enabled: !_isLoading,
+                    ),
+                    const SizedBox(height: 16),
+                    // Password Field
+                    TextFormField(
+                      controller: _passwordController,
+                      textInputAction: TextInputAction.next,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password *',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
-                        ],
-                      ),
-                    ),
-
-                  // Email Field
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Address *',
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: Validators.validateEmail,
-                    enabled: !_isLoading,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Password Field
-                  TextFormField(
-                    controller: _passwordController,
-                    textInputAction: TextInputAction.next,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password *',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
                       ),
+                      validator: Validators.validatePassword,
+                      enabled: !_isLoading,
                     ),
-                    validator: Validators.validatePassword,
-                    enabled: !_isLoading,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Confirm Password Field
-                  TextFormField(
-                    controller: _confirmPasswordController,
-                    textInputAction: TextInputAction.done,
-                    obscureText: _obscureConfirmPassword,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password *',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirmPassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+                    const SizedBox(height: 16),
+                    // Confirm Password Field
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      textInputAction: TextInputAction.done,
+                      obscureText: _obscureConfirmPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm Password *',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword;
+                            });
+                          },
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
-                          });
-                        },
                       ),
+                      validator: (value) => Validators.validateConfirmPassword(
+                        value,
+                        _passwordController.text,
+                      ),
+                      enabled: !_isLoading,
+                      onFieldSubmitted: (_) => _signUp(),
                     ),
-                    validator: (value) => Validators.validateConfirmPassword(
-                      value,
-                      _passwordController.text,
+                    const SizedBox(height: 32),
+                    LoadingButton(
+                      onPressed: _signUp,
+                      isLoading: _isLoading,
+                      child: const Text('Continue'),
                     ),
-                    enabled: !_isLoading,
-                    onFieldSubmitted: (_) => _signUp(),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  LoadingButton(
-                    onPressed: _signUp,
-                    isLoading: _isLoading,
-                    child: const Text('Continue'),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: const Text('Already have an account? Sign In'),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: const Text('Already have an account? Sign In'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

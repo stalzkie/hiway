@@ -149,10 +149,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                AppConstants.loginRoute,
-                (route) => false,
-              );
+              Navigator.of(context).pushNamed(AppConstants.loginRoute);
             },
             child: const Text('Continue to Sign In'),
           ),
