@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
+import 'package:hiway_app/core/utils/error_messages.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/widgets/common/error_display_widget.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:hiway_app/widgets/profile/job_seeker_form.dart';
 import 'package:hiway_app/widgets/profile/employer_form.dart';
@@ -123,7 +125,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceAll('DatabaseException: ', '');
+          _errorMessage = ErrorMessages.getUserFriendlyMessage(e);
         });
       }
     } finally {
@@ -196,30 +198,13 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
                   const SizedBox(height: 32),
 
+                  // Error Display
                   if (_errorMessage != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        border: Border.all(color: Colors.red.shade200),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error,
-                            color: Colors.red.shade600,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade600),
-                            ),
-                          ),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: ErrorDisplayWidget(
+                        error: _errorMessage!,
+                        onDismiss: () => setState(() => _errorMessage = null),
                       ),
                     ),
 
@@ -249,7 +234,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                 ? null
                                 : () {
                                     setState(() {
-                                      _selectedRole = AppConstants.jobSeekerRole;
+                                      _selectedRole =
+                                          AppConstants.jobSeekerRole;
                                     });
                                   },
                             child: Row(
@@ -259,7 +245,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                 ),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text('Job Seeker'),
                                       Text(
@@ -286,12 +273,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                   },
                             child: Row(
                               children: [
-                                Radio<String>(
-                                  value: AppConstants.employerRole,
-                                ),
+                                Radio<String>(value: AppConstants.employerRole),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text('Employer'),
                                       Text(

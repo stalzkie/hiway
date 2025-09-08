@@ -1,4 +1,3 @@
-// ui/dashboard.dart (JobSeekerDashboard) — focused to ensure job posts appear
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
@@ -150,7 +149,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           colors: [
             AppTheme.primaryColor,
             AppTheme.secondaryColor,
-            AppTheme.primaryColor.withOpacity(0.8), // fixed
+            AppTheme.primaryColor.withValues(alpha: 0.8), 
           ],
         ),
       ),
@@ -177,7 +176,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15), // fixed
+            color: Colors.white.withValues(alpha: 0.15), 
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.work_outline, color: Colors.white, size: 24),
@@ -188,10 +187,10 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15), // fixed
+              color: Colors.white.withValues(alpha: 0.15), 
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withOpacity(0.3), // fixed
+                color: Colors.white.withValues(alpha: 0.3), 
                 width: 1,
               ),
             ),
@@ -204,7 +203,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
 
   Widget _buildWelcomeSection() {
     final greeting = _getGreeting();
-    final userName = (_profile?.fullName ?? 'there').split(' ').first; // fixed
+    final userName = (_profile?.fullName ?? 'there').split(' ').first; 
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +227,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
                   Text(
                     'Let\'s find your perfect job',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9), // fixed
+                      color: Colors.white.withValues(alpha: 0.9), 
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                     ),
@@ -250,7 +249,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15), // fixed
+            color: Colors.black.withValues(alpha: 0.15), 
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -378,7 +377,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.1), // fixed
+              color: AppTheme.primaryColor.withValues(alpha: 0.1), 
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.work_outline_rounded, size: 64, color: AppTheme.primaryColor),

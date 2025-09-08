@@ -21,9 +21,11 @@ class _HomePageState extends State<HomePage> {
         ).pushNamedAndRemoveUntil(AppConstants.loginRoute, (route) => false);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
