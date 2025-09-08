@@ -122,19 +122,8 @@ class Validators {
     final digitsOnly = trimmedValue.replaceAll(RegExp(r'[^0-9+]'), '');
 
     // Philippine phone number validation
-    if (digitsOnly.startsWith('+63')) {
-      if (digitsOnly.length != 13) {
-        return 'Please enter a valid Philippine phone number (+639xxxxxxxxx)';
-      }
-      if (!digitsOnly.substring(3).startsWith('9')) {
-        return 'Please enter a valid Philippine mobile number';
-      }
-    } else if (digitsOnly.startsWith('09')) {
-      if (digitsOnly.length != 11) {
-        return 'Please enter a valid Philippine phone number (09xxxxxxxxx)';
-      }
-    } else {
-      return 'Please enter a valid Philippine phone number (09xxxxxxxxx or +639xxxxxxxxx)';
+    if (digitsOnly.length < 10) {
+    return 'Please enter at least 10 digits after +63 (e.g. +639xxxxxxxxx)';
     }
 
     return null;

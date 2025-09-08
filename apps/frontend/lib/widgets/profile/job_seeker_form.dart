@@ -75,12 +75,13 @@ class JobSeekerForm extends StatelessWidget {
         // Phone
         TextFormField(
           controller: phoneController,
+          maxLength: 10,
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
             labelText: 'Phone Number',
+            prefixText: '+63 ',
             prefixIcon: Icon(Icons.phone),
-            helperText: 'Format: +639123456789 or 09123456789',
           ),
           validator: Validators.validatePhoneNumber,
           enabled: !isLoading,

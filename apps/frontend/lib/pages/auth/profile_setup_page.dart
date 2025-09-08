@@ -81,7 +81,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           email: widget.email,
           phone: _phoneController.text.trim().isEmpty
               ? null
-              : _phoneController.text.trim(),
+              : '+63${_phoneController.text.trim()}',
           address: _addressController.text.trim().isEmpty
               ? null
               : _addressController.text.trim(),
@@ -104,7 +104,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           companyEmail: _companyEmailController.text.trim(),
           companyPhoneNumber: _companyPhoneController.text.trim().isEmpty
               ? null
-              : _companyPhoneController.text.trim(),
+              : '+63${_companyPhoneController.text.trim()}',
           dtiOrSecRegistration: _dtiOrSecController.text.trim().isEmpty
               ? null
               : _dtiOrSecController.text.trim(),
