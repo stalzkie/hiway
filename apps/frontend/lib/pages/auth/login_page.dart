@@ -47,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
       if (response.user != null && mounted) {
         _showSuccessSnackBar(AppConstants.loginSuccess);
         // Navigate to auth wrapper to handle role-based routing
-        Navigator.of(context).pushReplacementNamed('/auth');
+        Navigator.of(context).pushNamed('/auth');
       }
     } catch (e) {
       if (mounted) {
