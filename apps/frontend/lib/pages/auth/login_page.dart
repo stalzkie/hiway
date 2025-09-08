@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/core/constants/app_constants.dart';
 import 'package:hiway_app/core/utils/validators.dart';
+import 'package:hiway_app/core/utils/error_messages.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/pages/auth/signup_page.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
+import 'package:hiway_app/widgets/common/error_display_widget.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
-  
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -45,14 +46,13 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (response.user != null && mounted) {
-        _showSuccessSnackBar(AppConstants.loginSuccess);
         // Navigate to auth wrapper to handle role-based routing
         Navigator.of(context).pushNamed('/auth');
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceAll('AuthException: ', '');
+          _errorMessage = ErrorMessages.getUserFriendlyMessage(e);
         });
       }
     } finally {
@@ -62,23 +62,6 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
     }
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(message),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _navigateToSignUp() {
@@ -104,20 +87,20 @@ class _LoginPageState extends State<LoginPage> {
 
                   Container(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: Center (
-                            child: Image.asset(
-                              'assets/images/hiway-vector.png',
-                              width: 120,
-                              height: 120,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.image_not_supported,
-                                  size: 60,
-                                  color: const Color(0xFF352DC3),
-                                );
-                              },
-                            ),
+                    child: Center(
+                      child: Image.asset(
+                        'assets/images/hiway-vector.png',
+                        width: 120,
+                        height: 120,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.image_not_supported,
+                            size: 60,
+                            color: const Color(0xFF352DC3),
+                          );
+                        },
                       ),
+                    ),
                   ),
 
                   const SizedBox(height: 24),
@@ -143,34 +126,11 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 48),
 
+                  // Professional Error Display
                   if (_errorMessage != null)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      margin: const EdgeInsets.only(bottom: 24),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        border: Border.all(color: Colors.red.shade200),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: Colors.red.shade600,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(
-                                color: Colors.red.shade600,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    ErrorDisplayWidget.inline(
+                      error: _errorMessage!,
+                      onDismiss: () => setState(() => _errorMessage = null),
                     ),
 
                   // Email Field

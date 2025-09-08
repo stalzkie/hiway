@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:hiway_app/core/utils/error_messages.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/widgets/common/error_display_widget.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
 
 class EmailVerificationPage extends StatefulWidget {
@@ -14,25 +16,27 @@ class EmailVerificationPage extends StatefulWidget {
 class _EmailVerificationPageState extends State<EmailVerificationPage> {
   final AuthService _authService = AuthService();
   bool _isResending = false;
-  String? _message;
+  String? _errorMessage;
+  String? _successMessage;
 
   Future<void> _resendConfirmation() async {
     setState(() {
       _isResending = true;
-      _message = null;
+      _errorMessage = null;
+      _successMessage = null;
     });
 
     try {
       await _authService.resendEmailConfirmation(email: widget.email);
       if (mounted) {
         setState(() {
-          _message = 'Confirmation email sent successfully!';
+          _successMessage = ErrorMessages.emailVerificationSent;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _message = e.toString().replaceAll('AuthException: ', '');
+          _errorMessage = ErrorMessages.getUserFriendlyMessage(e);
         });
       }
     } finally {
@@ -109,44 +113,41 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
 
               const SizedBox(height: 32),
 
-              if (_message != null)
+              // Success Message Display
+              if (_successMessage != null)
                 Container(
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: _message!.contains('successfully')
-                        ? Colors.green.shade50
-                        : Colors.orange.shade50,
-                    border: Border.all(
-                      color: _message!.contains('successfully')
-                          ? Colors.green.shade200
-                          : Colors.orange.shade200,
-                    ),
+                    color: Colors.green.shade50,
+                    border: Border.all(color: Colors.green.shade200),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        _message!.contains('successfully')
-                            ? Icons.check_circle
-                            : Icons.info,
-                        color: _message!.contains('successfully')
-                            ? Colors.green.shade600
-                            : Colors.orange.shade600,
+                        Icons.check_circle,
+                        color: Colors.green.shade600,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          _message!,
-                          style: TextStyle(
-                            color: _message!.contains('successfully')
-                                ? Colors.green.shade600
-                                : Colors.orange.shade600,
-                          ),
+                          _successMessage!,
+                          style: TextStyle(color: Colors.green.shade600),
                         ),
                       ),
                     ],
+                  ),
+                ),
+
+              // Error Display
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: ErrorDisplayWidget(
+                    error: _errorMessage!,
+                    onDismiss: () => setState(() => _errorMessage = null),
                   ),
                 ),
 
