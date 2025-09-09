@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/data/models/roadmap_resources_model.dart';
 import 'package:hiway_app/data/services/roadmap_resources_service.dart';
+import 'package:hiway_app/widgets/common/loading_widget.dart';
 
 class RoadmapResourcesWidget extends StatefulWidget {
   final String roadmapId;
@@ -126,9 +127,9 @@ class _RoadmapResourcesWidgetState extends State<RoadmapResourcesWidget>
 
           // Content
           if (_isLoading) ...[
-            const Padding(
-              padding: EdgeInsets.all(32.0),
-              child: Center(child: CircularProgressIndicator()),
+            Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Center(child: LoadingWidget(nextScreen: Container())),
             ),
           ] else if (_errorMessage != null) ...[
             Padding(
@@ -567,15 +568,10 @@ class _RoadmapResourcesEditDialogState
                   child: const Text('Cancel'),
                 ),
                 const SizedBox(width: 12.0),
-                ElevatedButton(
-                  onPressed: _isSaving ? null : _saveResources,
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Save'),
+                LoadingButton(
+                  onPressed: _saveResources,
+                  isLoading: _isSaving,
+                  child: const Text('Save'),
                 ),
               ],
             ),

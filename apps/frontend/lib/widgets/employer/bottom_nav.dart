@@ -16,19 +16,24 @@ class EmployerBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, -3),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: SafeArea(
         child: Container(
-          height: 65,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+          height: 70,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(
                 icon: Icons.dashboard_outlined,
@@ -81,39 +86,39 @@ class EmployerBottomNav extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 5),
+          padding: const EdgeInsets.symmetric(vertical: 2),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
+              // Icon container with improved styling
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                      ? AppTheme.primaryColor.withValues(alpha: 0.12)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   isSelected ? activeIcon : icon,
-                  size: 20,
+                  size: 22,
                   color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 2),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected
-                        ? AppTheme.primaryColor
-                        : Colors.grey[600],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
+                  letterSpacing: 0.1,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

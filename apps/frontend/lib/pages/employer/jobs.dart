@@ -4,6 +4,7 @@ import 'package:hiway_app/widgets/employer/index.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 import 'package:hiway_app/data/services/job_post_service.dart';
+import 'package:hiway_app/widgets/employer/job_actions.dart';
 
 class JobsPage extends StatefulWidget {
   final EmployerModel? profile;
@@ -49,6 +50,11 @@ class _JobsPageState extends State<JobsPage>
 
     try {
       final jobs = await _jobPostService.getEmployerJobPosts();
+      
+      if (jobs.isNotEmpty) {
+        print('🔥 DEBUG: First job: ${jobs.first.jobTitle} - ID: ${jobs.first.jobPostId}');
+      }
+      
       if (mounted) {
         setState(() {
           _jobs = jobs;
@@ -57,6 +63,7 @@ class _JobsPageState extends State<JobsPage>
         });
       }
     } catch (e) {
+      // print('🔥 DEBUG: Error loading jobs: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         showErrorSnackBar('Failed to load jobs: ${e.toString()}');
