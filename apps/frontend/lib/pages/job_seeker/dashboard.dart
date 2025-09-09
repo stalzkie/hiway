@@ -7,6 +7,7 @@ import 'package:hiway_app/data/models/job_model.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/widgets/job_seeker/bottom_nav.dart';
 import 'package:hiway_app/widgets/job_seeker/job_card.dart';
+import 'package:hiway_app/pages/job_seeker/application.dart';
 
 class JobSeekerDashboard extends StatefulWidget {
   const JobSeekerDashboard({super.key});
@@ -479,6 +480,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
 
   void _handleJobTap(JobModel job) {
     debugPrint('Tapped on job: ${job.title}');
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ApplicationView(jobID: job.id)));
   }
 
   void _handleBottomNavTap(int index) {
