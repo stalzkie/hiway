@@ -106,10 +106,11 @@ class _SignupPageState extends State<SignupPage> {
 
                     Text(
                       'Join ${AppConstants.appName} Today!',
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).primaryColor,
-                      ),
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
+                          ),
                       textAlign: TextAlign.center,
                     ),
 

@@ -258,6 +258,34 @@ class JobPostModel {
     return false; // Always false since deadline doesn't exist in database
   }
 
+  /// Check if job has embedding data processed
+  bool get hasEmbedding => pineconeId != null && embeddingChecksum != null;
+
+  /// Check if job needs embedding processing
+  bool get needsEmbeddingUpdate {
+    if (pineconeId == null || embeddingChecksum == null) return true;
+
+    // Calculate current checksum of job content for comparison
+    final currentChecksum = _calculateContentChecksum();
+    return embeddingChecksum != currentChecksum;
+  }
+
+  /// Calculate content checksum for embedding comparison
+  String _calculateContentChecksum() {
+    final content = [
+      jobTitle,
+      jobOverview,
+      jobLocation,
+      jobSkills.join(' '),
+      jobExperience
+          .map((exp) => '${exp.years} years in ${exp.domain}')
+          .join(' '),
+      salary.toString(),
+    ].join(' ');
+
+    return content.hashCode.toString();
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

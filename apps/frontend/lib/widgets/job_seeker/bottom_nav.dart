@@ -16,31 +16,35 @@ class JobSeekerBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.withValues(alpha: 0.1), width: 1),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, -3),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: SafeArea(
         child: Container(
-          height: 65, 
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+          height: 70,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(
-                icon: Icons.dashboard_outlined,
-                activeIcon: Icons.dashboard,
-                label: 'Dashboard',
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
+                label: 'Home',
                 index: 0,
                 isSelected: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
               _buildNavItem(
-                icon: Icons.route_outlined,
-                activeIcon: Icons.route,
+                customIcon: 'assets/images/hiway-vector.png',
                 label: 'Roadmap',
                 index: 1,
                 isSelected: currentIndex == 1,
@@ -62,8 +66,9 @@ class JobSeekerBottomNav extends StatelessWidget {
   }
 
   Widget _buildNavItem({
-    required IconData icon,
-    required IconData activeIcon,
+    IconData? icon,
+    IconData? activeIcon,
+    String? customIcon,
     required String label,
     required int index,
     required bool isSelected,
@@ -73,44 +78,75 @@ class JobSeekerBottomNav extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 5),
+          padding: const EdgeInsets.symmetric(vertical: 2),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6), 
+              // Icon container with improved styling
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                      ? AppTheme.primaryColor.withValues(alpha: 0.12)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  isSelected ? activeIcon : icon,
-                  size: 20, 
-                  color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
-                ),
+                child: _buildIcon(isSelected, customIcon, icon, activeIcon),
               ),
-              const SizedBox(height: 2), 
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected
-                        ? AppTheme.primaryColor
-                        : Colors.grey[600],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
+                  letterSpacing: 0.1,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildIcon(
+    bool isSelected,
+    String? customIcon,
+    IconData? icon,
+    IconData? activeIcon,
+  ) {
+    if (customIcon != null) {
+      // Custom image icon (for roadmap)
+      return SizedBox(
+        width: 40,
+        height: 30,
+        child: Image.asset(
+          customIcon,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.route,
+              size: 26,
+              color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
+            );
+          },
+        ),
+      );
+    } else if (icon != null && activeIcon != null) {
+      return Icon(
+        isSelected ? activeIcon : icon,
+        size: 22,
+        color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
+      );
+    } else {
+      // Fallback
+      return Icon(Icons.help_outline, size: 22, color: Colors.grey[600]);
+    }
   }
 }

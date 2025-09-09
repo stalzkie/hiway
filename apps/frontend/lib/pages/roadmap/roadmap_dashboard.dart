@@ -3,6 +3,7 @@ import 'package:hiway_app/data/models/roadmap_role_model.dart';
 import 'package:hiway_app/data/models/seeker_milestone_status_model.dart';
 import 'package:hiway_app/data/services/role_roadmap_service.dart';
 import 'package:hiway_app/data/services/seeker_milestone_status_service.dart';
+import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:hiway_app/widgets/roadmap/roadmap_resources_widget.dart';
 
 /// Roadmap Dashboard - Comprehensive view of job seeker's roadmaps and progress
@@ -240,7 +241,7 @@ class _RoadmapDashboardState extends State<RoadmapDashboard>
 
   Widget _buildRoadmapsTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: LoadingWidget(nextScreen: Container()));
     }
 
     if (_errorMessage != null) {
@@ -439,7 +440,7 @@ class _RoadmapDashboardState extends State<RoadmapDashboard>
 
   Widget _buildProgressTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: LoadingWidget(nextScreen: Container()));
     }
 
     if (_statuses.isEmpty) {

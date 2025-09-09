@@ -40,9 +40,9 @@ _sb: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
 
 # --------------------------------------------------------------------
 # Enqueue helpers — ALWAYS include a valid 'reason'
-# Your DB CHECK allows only: 'insert', 'update', 'manual', 'backfill'
+# Your DB CHECK allows only: 'insert', 'update', 'manual'
 # --------------------------------------------------------------------
-_ALLOWED_REASONS = {"insert", "update", "manual", "backfill"}
+_ALLOWED_REASONS = {"insert", "update", "manual"}  # Fixed: removed 'backfill'
 
 def _fetch_seeker_row(job_seeker_id: str) -> Optional[dict]:
     try:

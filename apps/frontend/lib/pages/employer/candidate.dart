@@ -158,7 +158,27 @@ class _CandidatesPageState extends State<CandidatesPage> {
 
   Widget _buildContent(ThemeData theme) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                const Color(0xFF352DC3),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Loading candidates...',
+              style: TextStyle(
+                color: const Color(0xFF292929),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_errorMessage != null) {
