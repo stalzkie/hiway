@@ -32,6 +32,216 @@ class LoadingIndicator extends StatelessWidget {
   }
 }
 
+/// Smooth animated loading widget with slide and fade animations
+class LoadingWidget extends StatefulWidget {
+  final Widget nextScreen;
+  final String? splashText;
+  final Duration duration;
+
+  const LoadingWidget({
+    super.key,
+    required this.nextScreen,
+    this.splashText,
+    this.duration = const Duration(seconds: 3),
+  });
+
+  @override
+  State<LoadingWidget> createState() => _LoadingWidgetState();
+}
+
+class _LoadingWidgetState extends State<LoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _slideController;
+  late AnimationController _fadeController;
+  late AnimationController _rotationController;
+
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _rotationAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Slide animation controller for the vector logo
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    // Fade animation controller for the text logo
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    // Subtle rotation animation for extra smoothness
+    _rotationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    // Slide animation with elastic bounce effect
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(-1.2, 0), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.elasticOut),
+        );
+
+    // Smooth fade animation for text
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOutQuart),
+    );
+
+    // Subtle rotation animation
+    _rotationAnimation = Tween<double>(begin: -0.05, end: 0.05).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.easeInOutSine),
+    );
+
+    // Start animations
+    _startAnimations();
+  }
+
+  void _startAnimations() async {
+    // Start both animations with a slight delay for smoother effect
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    // Start slide animation with bounce effect
+    _slideController.forward();
+
+    // Start subtle rotation animation
+    _rotationController.repeat(reverse: true);
+
+    // Start fade animation slightly after slide starts
+    await Future.delayed(const Duration(milliseconds: 400));
+    _fadeController.forward();
+
+    // Wait for remaining duration
+    await Future.delayed(
+      Duration(milliseconds: widget.duration.inMilliseconds - 600),
+    );
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => widget.nextScreen,
+          transitionsBuilder: (context, animation, _, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 0.1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutQuart,
+                    ),
+                  ),
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _slideController.dispose();
+    _fadeController.dispose();
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.primary,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Sliding Hiway vector logo with scale and rotation animation
+            AnimatedBuilder(
+              animation: Listenable.merge([
+                _slideController,
+                _rotationController,
+              ]),
+              builder: (context, child) {
+                return SlideTransition(
+                  position: _slideAnimation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                      CurvedAnimation(
+                        parent: _slideController,
+                        curve: Curves.elasticOut,
+                      ),
+                    ),
+                    child: Transform.rotate(
+                      angle: _rotationAnimation.value,
+                      child: Image.asset(
+                        'assets/images/hiway-logo.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 30),
+
+            // Fading Hiway text logo with slide up effect
+            AnimatedBuilder(
+              animation: _fadeController,
+              builder: (context, child) {
+                return SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0, 0.5),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: _fadeController,
+                          curve: Curves.easeOutQuart,
+                        ),
+                      ),
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Image.asset(
+                      'assets/images/hiway text.png',
+                      width: 180,
+                      height: 60,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            if (widget.splashText != null) ...[
+              const SizedBox(height: 20),
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Text(
+                  widget.splashText!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class LoadingOverlay extends StatelessWidget {
   final bool isLoading;
   final Widget child;
@@ -74,7 +284,15 @@ class LoadingOverlay extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const LoadingIndicator(size: 32, strokeWidth: 3),
+              // Simple logo with loading indicator
+              Image.asset(
+                'assets/images/hiway-vector.png',
+                width: 60,
+                height: 60,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 16),
+              const LoadingIndicator(size: 24, strokeWidth: 2),
               if (loadingText != null) ...[
                 const SizedBox(height: 16),
                 Text(

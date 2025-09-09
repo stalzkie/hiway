@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from supabase import create_client
 
@@ -103,6 +103,112 @@ def _profile_changed(seeker_row: Dict[str, Any], last_entry: Optional[Dict[str, 
     return seeker_time > last_time  # profile updated after last record
 
 
+# ---------------- Resources enrichment ----------------
+def _fetch_roadmap_resources(roadmap_id: str) -> Dict[int, Dict[str, Any]]:
+    """
+    Returns a dict keyed by milestone_index with shape:
+    {
+      0: {"resources":[...], "certifications":[...], "network_groups":[...]},
+      1: {...},
+      ...
+    }
+    """
+    try:
+        res = (
+            sb.table("roadmap_resources")
+            .select("milestone_index, resources, certifications, network_groups")
+            .eq("roadmap_id", roadmap_id)
+            .order("milestone_index", desc=False)  # Changed from asc=True to desc=False
+            .execute()
+        )
+        items = res.data or []
+        by_index: Dict[int, Dict[str, Any]] = {}
+        for row in items:
+            try:
+                idx = int(row.get("milestone_index"))
+            except Exception as e:
+                print(f"Failed to parse milestone_index: {e}")
+                continue
+            by_index[idx] = {
+                "resources": row.get("resources") or [],
+                "certifications": [
+                    cert for cert in (row.get("certifications") or [])
+                    if cert and isinstance(cert, dict) and cert.get("url")
+                ],
+                "network_groups": row.get("network_groups") or [],
+            }
+        return by_index
+    except Exception as e:
+        print(f"Error fetching roadmap resources: {e}")
+        return {}
+
+
+def _enrich_roadmap_milestones(roadmap_doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Attach resources/certifications/network_groups arrays to each milestone (by index).
+    Safe no-op if roadmap_doc or roadmap_id is missing.
+    """
+    try:
+        if not roadmap_doc:
+            return roadmap_doc
+
+        roadmap_id = roadmap_doc.get("roadmap_id")
+        if not roadmap_id:
+            return roadmap_doc
+
+        milestones: List[Dict[str, Any]] = list(roadmap_doc.get("milestones") or [])
+        if not milestones:
+            # still return doc (may be created later)
+            return roadmap_doc
+
+        by_index = _fetch_roadmap_resources(roadmap_id)
+
+        enriched: List[Dict[str, Any]] = []
+        for i, m in enumerate(milestones):
+            try:
+                row = dict(m)  # copy to avoid mutating original
+                extras = by_index.get(i, {}) or {}
+                # Attach arrays (always include keys for front-end stability)
+                row["resources"] = extras.get("resources") or []
+                # Filter out certifications with missing or empty URLs
+                row["certifications"] = [
+                    c for c in (extras.get("certifications") or [])
+                    if c and isinstance(c, dict) and c.get("title") and c.get("url")
+                ]
+                row["network_groups"] = extras.get("network_groups") or []
+                enriched.append(row)
+            except Exception as e:
+                print(f"Error enriching milestone {i}: {e}")
+                # Add a safe version of the milestone without enrichment
+                enriched.append({
+                    **m,
+                    "resources": [],
+                    "certifications": [],
+                    "network_groups": [],
+                })
+
+        roadmap_doc = dict(roadmap_doc)
+        roadmap_doc["milestones"] = enriched
+        return roadmap_doc
+    except Exception as e:
+        print(f"Error in _enrich_roadmap_milestones: {e}")
+        if roadmap_doc:
+            # Return original document without enrichment rather than failing
+            return {
+                **roadmap_doc,
+                "milestones": [
+                    {
+                        **m,
+                        "resources": [],
+                        "certifications": [],
+                        "network_groups": [],
+                    }
+                    for m in (roadmap_doc.get("milestones") or [])
+                ]
+            }
+        return None
+
+
 # ---------------- Orchestrator ----------------
 def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
     """
@@ -112,6 +218,7 @@ def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool 
       3) Ensure a roadmap exists for the role (create if needed).
       4) Run LLM-based milestone locator (idempotent: recomputes only if needed).
       5) Return the roadmap document + current milestone status (always).
+         **Milestones are enriched with resources/certs/groups.**
     """
     job_seeker_id = get_seeker_id_by_email(email)
     if not job_seeker_id:
@@ -185,8 +292,10 @@ def orchestrate_user_update(email: str, role: Optional[str] = None, force: bool 
         model_version="orchestrator",
     )
 
+    # -------- Enrich roadmap milestones with stored resources/certs/groups ------
+    roadmap_doc = _enrich_roadmap_milestones(roadmap_doc)
+
     # -------- 5) Assemble response --------
-    # Status label: "updated" if we changed anything; else "cached"
     did_update = bool(results) or (force or needs_roadmap_or_locate)
     return {
         "status": "updated" if did_update else "cached",

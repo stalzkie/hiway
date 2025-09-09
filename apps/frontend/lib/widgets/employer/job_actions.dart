@@ -59,7 +59,7 @@ mixin JobActionsMixin<T extends StatefulWidget> on State<T> {
   /// Handle job submission (create)
   Future<void> handleJobSubmission(JobPostFormData formData) async {
     try {
-      await _jobPostService.createJobPost(
+      final jobPost = await _jobPostService.createJobPost(
         jobTitle: formData.jobTitle,
         jobOverview: formData.jobOverview,
         jobLocation: formData.jobLocation,
@@ -68,7 +68,6 @@ mixin JobActionsMixin<T extends StatefulWidget> on State<T> {
         jobExperience: formData.jobExperience,
         jobEducation: formData.jobEducation,
         jobLicensesCertifications: formData.jobLicensesCertifications,
-        // Removed jobType and deadline since they don't exist in database
       );
 
       if (mounted) {
@@ -76,6 +75,7 @@ mixin JobActionsMixin<T extends StatefulWidget> on State<T> {
         showSuccessSnackBar('Job posted successfully!');
       }
     } catch (e) {
+  
       if (mounted) {
         showErrorSnackBar('Failed to create job: ${e.toString()}');
       }
@@ -95,7 +95,6 @@ mixin JobActionsMixin<T extends StatefulWidget> on State<T> {
         jobExperience: formData.jobExperience,
         jobEducation: formData.jobEducation,
         jobLicensesCertifications: formData.jobLicensesCertifications,
-        // Removed jobType and deadline since they don't exist in database
       );
 
       if (mounted) {

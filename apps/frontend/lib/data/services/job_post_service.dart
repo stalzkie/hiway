@@ -52,8 +52,29 @@ class JobPostService {
             ? null
             : jobLicensesCertifications,
         'salary': salary.toJson(),
+        // Create search_document for embedding processing
+        'search_document': _buildSearchDocument(
+          jobTitle: jobTitle.trim(),
+          jobOverview: jobOverview.trim(),
+          jobLocation: jobLocation.trim(),
+          jobCompany: employer.company ?? '',
+          jobSkills: jobSkills,
+          jobExperience: jobExperience,
+          jobEducation: jobEducation,
+          jobLicensesCertifications: jobLicensesCertifications,
+          salary: salary,
+        ),
         // Removed job_type, deadline, and status as they don't exist in the database schema
       };
+
+      // Debug: Log search document for verification
+      final searchDoc = jobData['search_document'] as String;
+      print('🔍 DEBUG: Generated search document (${searchDoc.length} chars):');
+      print(
+        searchDoc.length > 200
+            ? '${searchDoc.substring(0, 200)}...'
+            : searchDoc,
+      );
 
       final response = await _client
           .from(_tableName)
@@ -61,7 +82,12 @@ class JobPostService {
           .select()
           .single();
 
-      return JobPostModel.fromJson(response);
+      final jobPost = JobPostModel.fromJson(response);
+
+      // Ensure embedding queue processing (for AI functionality)
+      await _ensureEmbeddingQueued(jobPost.jobPostId, 'insert');
+
+      return jobPost;
     } on PostgrestException catch (e) {
       throw DatabaseException('Failed to create job post: ${e.message}');
     } on AuthException {
@@ -130,6 +156,31 @@ class JobPostService {
         throw ValidationException('No fields to update');
       }
 
+      // Get the current job post to build updated search_document
+      final currentJobPost = await getJobPostById(jobPostId);
+      if (currentJobPost == null) {
+        throw NotFoundException('Job post not found');
+      }
+
+      // Build updated search document with new and existing values
+      final updatedSearchDocument = _buildSearchDocument(
+        jobTitle: jobTitle ?? currentJobPost.jobTitle,
+        jobOverview: jobOverview ?? currentJobPost.jobOverview,
+        jobLocation: jobLocation ?? currentJobPost.jobLocation,
+        jobCompany:
+            currentJobPost.jobCompany, // Company doesn't change in updates
+        jobSkills: jobSkills ?? currentJobPost.jobSkills,
+        jobExperience: jobExperience ?? currentJobPost.jobExperience,
+        jobEducation: jobEducation ?? currentJobPost.jobEducation,
+        jobLicensesCertifications:
+            jobLicensesCertifications ??
+            currentJobPost.jobLicensesCertifications,
+        salary: salary ?? currentJobPost.salary,
+      );
+
+      // Add updated search document
+      updateData['search_document'] = updatedSearchDocument;
+
       final response = await _client
           .from(_tableName)
           .update(updateData)
@@ -137,7 +188,12 @@ class JobPostService {
           .select()
           .single();
 
-      return JobPostModel.fromJson(response);
+      final jobPost = JobPostModel.fromJson(response);
+
+      // Ensure embedding queue processing for updates (for AI functionality)
+      await _ensureEmbeddingQueued(jobPost.jobPostId, 'update');
+
+      return jobPost;
     } on PostgrestException catch (e) {
       if (e.code == 'PGRST116') {
         throw NotFoundException('Job post not found');
@@ -197,10 +253,15 @@ class JobPostService {
     int? offset = 0,
   }) async {
     try {
+      print('🔍 DEBUG: Getting employer job posts...');
+
       final employer = await _authService.getEmployerProfile();
       if (employer == null) {
+        print('❌ DEBUG: No employer profile found');
         throw AuthException('No employer profile found');
       }
+
+      print('👤 DEBUG: Employer ID: ${employer.employerId}');
 
       var query = _client
           .from(_tableName)
@@ -216,18 +277,31 @@ class JobPostService {
         query = query.range(offset, offset + (limit ?? 50) - 1);
       }
 
+      print('🔍 DEBUG: Executing job posts query...');
       final response = await query;
 
-      return (response as List)
+      final jobList = (response as List)
           .map((job) => JobPostModel.fromJson(job as Map<String, dynamic>))
           .toList();
+
+      print('✅ DEBUG: Found ${jobList.length} job posts for employer');
+      for (int i = 0; i < jobList.length; i++) {
+        print(
+          '📋 DEBUG: Job $i: ${jobList[i].jobTitle} (${jobList[i].jobPostId})',
+        );
+      }
+
+      return jobList;
     } on PostgrestException catch (e) {
+      print('❌ DEBUG: Database error: ${e.message}');
       throw DatabaseException(
         'Failed to fetch employer job posts: ${e.message}',
       );
-    } on AuthException {
+    } on AuthException catch (e) {
+      print('❌ DEBUG: Auth error: ${e.message}');
       rethrow;
     } catch (e) {
+      print('❌ DEBUG: Unexpected error: $e');
       throw DatabaseException('Failed to fetch employer job posts: $e');
     }
   }
@@ -435,5 +509,112 @@ class JobPostService {
       }
       throw DatabaseException('Failed to delete job posts: $e');
     }
+  }
+
+  /// Helper method to ensure embedding queue processing
+  Future<void> _ensureEmbeddingQueued(
+    String jobPostId,
+    String operationType,
+  ) async {
+    try {
+      // Check if already queued (not processed)
+      final existingQueue = await _client
+          .from('embedding_queue_post')
+          .select()
+          .eq('job_post_id', jobPostId)
+          .isFilter('processed_at', null)
+          .limit(1);
+
+      // If not queued, add to queue
+      if (existingQueue.isEmpty) {
+        await _client.from('embedding_queue_post').insert({
+          'job_post_id': jobPostId,
+          'reason': operationType, 
+          'enqueued_at': DateTime.now().toIso8601String(),
+        });
+
+        print('✅ Embedding queued for job post: $jobPostId');
+      } else {
+        print('📝 Embedding already queued for job post: $jobPostId');
+      }
+    } catch (e) {
+      print(
+        '⚠️ Warning: Could not queue embedding for job post $jobPostId: $e',
+      );
+      // Don't throw - embedding is nice-to-have, not critical for basic functionality
+    }
+  }
+
+  /// Check embedding queue status for a job post
+  Future<String?> getEmbeddingStatus(String jobPostId) async {
+    try {
+      final result = await _client
+          .from('embedding_queue_post')
+          .select('processed_at')
+          .eq('job_post_id', jobPostId)
+          .order('enqueued_at', ascending: false)
+          .limit(1);
+
+      if (result.isNotEmpty) {
+        final processedAt = result.first['processed_at'];
+        return processedAt == null ? 'pending' : 'completed';
+      }
+      return null;
+    } catch (e) {
+      print(
+        '⚠️ Warning: Could not check embedding status for job post $jobPostId: $e',
+      );
+      return null;
+    }
+  }
+
+  /// Force embedding queue processing for a job post (useful for reprocessing)
+  Future<void> forceEmbeddingQueue(String jobPostId) async {
+    await _ensureEmbeddingQueued(jobPostId, 'update');
+  }
+
+  /// Build search document for embedding processing
+  String _buildSearchDocument({
+    required String jobTitle,
+    required String jobOverview,
+    required String jobLocation,
+    required String jobCompany,
+    required List<String> jobSkills,
+    required List<JobExperienceModel> jobExperience,
+    List<String>? jobEducation,
+    List<String>? jobLicensesCertifications,
+    required SalaryModel salary,
+  }) {
+    final components = <String>[
+      // Job title and company (most important)
+      jobTitle,
+      jobCompany,
+
+      // Location
+      jobLocation,
+
+      // Detailed description
+      jobOverview,
+
+      // Skills
+      if (jobSkills.isNotEmpty) 'Skills: ${jobSkills.join(', ')}',
+
+      // Experience requirements
+      if (jobExperience.isNotEmpty)
+        'Experience: ${jobExperience.map((exp) => '${exp.years} years in ${exp.domain}').join(', ')}',
+
+      // Education
+      if (jobEducation?.isNotEmpty == true)
+        'Education: ${jobEducation!.join(', ')}',
+
+      // Licenses/Certifications
+      if (jobLicensesCertifications?.isNotEmpty == true)
+        'Certifications: ${jobLicensesCertifications!.join(', ')}',
+
+      // Salary information
+      'Salary: ${salary.displayText}',
+    ];
+
+    return components.where((c) => c.isNotEmpty).join('\n');
   }
 }

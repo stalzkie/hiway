@@ -45,6 +45,8 @@ pillow==11.3.0
 pinecone==7.3.0
 pinecone-plugin-assistant==1.8.0
 pinecone-plugin-interface==0.0.7
+pinecone-text>=0.6.0 
+cohere>=5.3.0
 postgrest==1.1.1
 proto-plus==1.26.1
 protobuf==5.29.5

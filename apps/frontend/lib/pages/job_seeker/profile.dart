@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/data/models/job_seeker_model.dart';
-import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/widgets/profile/profile_section.dart';
 import 'package:hiway_app/widgets/profile/info_card.dart';
@@ -74,7 +73,27 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: AppTheme.backgroundColor,
-        body: const Center(child: LoadingIndicator(size: 48)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Loading your profile...',
+                style: TextStyle(
+                  color: AppTheme.darkColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -139,7 +158,7 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
                     ),
                   ],
                 ),
-              ),
+              ),  
             ),
           ],
         ),

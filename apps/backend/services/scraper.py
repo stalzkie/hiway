@@ -341,6 +341,7 @@ def _compose_roadmap_prompt(role: str, max_milestones: int) -> str:
     return (
         "You are designing an upskilling roadmap for a job seeker focused on the Philippines.\n"
         "TASK: Given the target ROLE, propose leveled knowledge milestones (Basic → Advanced) AND, for each milestone, make sure this roadmap is centered around the job economy of the Philippines\n"
+        "You can create only a MAX of 10 knowledge milestones and a MINIMUM of 3 knowledge milestones."
         "list EXACTLY 3 specific certificates/licenses that validate skills for that milestone.\n"
         "STRICT RULES:\n"
         "• Certificates must be SPECIFIC credential names with EXACT titles as they appear on official sites.\n"
@@ -611,7 +612,7 @@ def _resolve_one_cert_improved(
 
     print(f'[cert-resolve] "{name}" → NO URL FOUND')
     used_cert_names.add(name_key)
-    return {"title": name, "url": None, "source": "no-url-found"}
+    return None  # Return None instead of a dict with null URL
 
 def resolve_cert_names_to_urls(
     names: List[str],
@@ -625,7 +626,9 @@ def resolve_cert_names_to_urls(
     for name in names:
         if len(out) >= k:
             break
-        out.append(_resolve_one_cert_improved(name, used_urls, used_cert_names, serpapi_key=serpapi_key))
+        cert = _resolve_one_cert_improved(name, used_urls, used_cert_names, serpapi_key=serpapi_key)
+        if cert is not None and cert.get("url"):  # Only add certificates that have a URL
+            out.append(cert)
     return out
 
 # -------- Section search using milestone title + provided cert names --------
@@ -699,7 +702,7 @@ def search_sections_for_milestone(
 def generate_and_store_roadmap(
     job_seeker_id: str,
     role: str,
-    max_milestones: int = 5,
+    max_milestones: int = 10,
     provider: str = "auto",
     gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY"),
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
@@ -720,6 +723,11 @@ def generate_and_store_roadmap(
     )
     if not milestones:
         return ""
+
+    # Ensure every milestone has a non-null 'title' (fallback to 'milestone')
+    for ms in milestones:
+        if not ms.get("title"):
+            ms["title"] = ms.get("milestone", "")
 
     # 2) Collect resources per milestone
     used_urls: Set[str] = set()

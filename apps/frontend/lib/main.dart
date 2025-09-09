@@ -87,7 +87,7 @@ class MyApp extends StatelessWidget {
         AppConstants.employerDashboardRoute: (context) =>
             const EmployerDashboard(),
         AppConstants.profileRoute: (context) => const JobSeekerProfile(),
-        AppConstants.roadmapRoute: (context) => const JobSeekerRoadmap(),
+        AppConstants.roadmapRoute: (context) => const JobSeekerRoadmap(email: ''),
         '/auth': (context) => const AuthWrapper(),
       },
       onGenerateRoute: (settings) {

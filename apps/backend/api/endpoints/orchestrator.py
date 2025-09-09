@@ -2,8 +2,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, HTTPException
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any, List, Union
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    Field,
+    ConfigDict,
+    field_validator,
+    model_validator,   # ← needed for pre-coercions
+)
+from typing import Optional, Dict, Any, List
 
 from apps.backend.services.orchestrator import orchestrate_user_update
 
@@ -20,10 +27,6 @@ def _to_list(val: Any) -> List[Any]:
     return [val]
 
 def _coerce_matched_item(obj: Any) -> Optional[Dict[str, Any]]:
-    """
-    Normalize to {"item": str, "source": Optional[str]}.
-    Accept strings and dicts; ignore anything else.
-    """
     if isinstance(obj, dict):
         item = obj.get("item") or obj.get("name") or obj.get("topic")
         if item is None:
@@ -44,9 +47,6 @@ def _normalize_matched_field(val: Any) -> List[Dict[str, Any]]:
     return out
 
 def _coerce_gap_item(obj: Any) -> Optional[Dict[str, Any]]:
-    """
-    Normalize gaps to {"item": str}.
-    """
     if isinstance(obj, dict):
         item = obj.get("item") or obj.get("name") or obj.get("topic")
         if item is None:
@@ -71,7 +71,6 @@ def _coerce_float(val: Any) -> Optional[float]:
     if isinstance(val, (int, float)):
         return float(val)
     try:
-        # tolerate strings like "12.5" or "~12.5 hours"
         s = str(val).strip()
         num = ""
         dot_seen = False
@@ -126,13 +125,13 @@ class MilestoneScore(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     index: int
-    title: Optional[str] = None
+    title: str                          # ← keep required
     score_pct: float
     matched_evidence: Optional[List[MilestoneMatchedEvidence]] = None
     gaps: Optional[List[MilestoneGap]] = None
     rationale: Optional[str] = None  # 1–2 sentences
 
-    # NEW: ETA fields from milestone_locator
+    # ETA fields
     eta_hours: Optional[float] = Field(
         default=None,
         description="Estimated focused hours to reach pass_gate for this milestone"
@@ -146,11 +145,25 @@ class MilestoneScore(BaseModel):
         description="LLM/heuristic confidence 0..1"
     )
 
-    # ---- Defensive coercions (accept legacy shapes gracefully) ----
+    # ---- Coercions / defaults (so 'title' is never missing) ----
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_title(cls, data: Any):
+        if isinstance(data, dict):
+            t = (data.get("title") or "").strip()
+            if not t:
+                # fallback to deterministic label using index if present
+                idx = data.get("index")
+                try:
+                    idx = int(idx)
+                except Exception:
+                    idx = 0
+                data["title"] = f"Milestone {idx}"
+        return data
+
     @field_validator("matched_evidence", mode="before")
     @classmethod
     def _coerce_matched(cls, v: Any):
-        # Accept legacy fields too: skills_scored / outcomes_scored -> map to matched_evidence (item only)
         return _normalize_matched_field(v)
 
     @field_validator("gaps", mode="before")
@@ -190,12 +203,71 @@ class MilestoneStatus(BaseModel):
     )
     model_version: Optional[str] = None
     low_confidence: Optional[bool] = None
-    calculated_at: Optional[str] = None  # we’ll map calculated_at_iso -> calculated_at
+    calculated_at: Optional[str] = None
 
     @field_validator("gaps", mode="before")
     @classmethod
     def _coerce_status_gaps(cls, v: Any):
         return _normalize_gaps_field(v)
+
+# ---------- Typed link + milestone (titles stay required) ----------
+class RoadmapLink(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title: str
+    source: Optional[str] = None
+    url: Optional[str] = None
+
+class RoadmapMilestone(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    title: str                             # ← keep required
+    level: Optional[str] = None
+    milestone: Optional[str] = None
+    description: Optional[str] = None
+
+    # use default_factory for lists
+    resources: List[RoadmapLink] = Field(default_factory=list)
+    certifications: List[RoadmapLink] = Field(default_factory=list)
+    network_groups: List[RoadmapLink] = Field(default_factory=list)
+
+    # ensure 'title' is present by falling back to 'milestone' (or a fixed label)
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_required_title(cls, data: Any):
+        if isinstance(data, dict):
+            t = (data.get("title") or "").strip()
+            if not t:
+                alt = (data.get("milestone") or data.get("description") or "").strip()
+                data["title"] = alt if alt else "Milestone"
+        return data
+
+    # coerce link arrays; drop entries without any usable title
+    @field_validator("resources", "certifications", "network_groups", mode="before")
+    @classmethod
+    def _coerce_links(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, dict):
+            v = [v]
+        if not isinstance(v, list):
+            return []
+        out = []
+        for e in v:
+            if isinstance(e, dict):
+                t = (e.get("title") or e.get("name") or "").strip()
+                if not t and e.get("url"):
+                    # derive a simple title from host if needed
+                    try:
+                        from urllib.parse import urlparse
+                        host = (urlparse(e.get("url")).netloc or "").lower()
+                        t = host or ""
+                    except Exception:
+                        t = ""
+                if t:
+                    out.append({"title": t, "source": e.get("source"), "url": e.get("url")})
+        return out
+
+# ---------------------------------------------------------------
 
 class RoadmapDoc(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -203,7 +275,7 @@ class RoadmapDoc(BaseModel):
     roadmap_id: Optional[str] = None
     job_seeker_id: Optional[str] = None
     role: Optional[str] = None
-    milestones: Optional[List[Dict[str, Any]]] = None  # passed through as-is
+    milestones: Optional[List[RoadmapMilestone]] = None
     prompt_template: Optional[str] = None
     created_at: Optional[str] = None
     expires_at: Optional[str] = None

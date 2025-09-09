@@ -4,7 +4,6 @@ import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/data/services/job_service.dart';
 import 'package:hiway_app/data/models/job_seeker_model.dart';
 import 'package:hiway_app/data/models/job_model.dart';
-import 'package:hiway_app/widgets/common/loading_widget.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/widgets/job_seeker/bottom_nav.dart';
 import 'package:hiway_app/widgets/job_seeker/job_card.dart';
@@ -119,7 +118,30 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: LoadingIndicator(size: 48)));
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Loading your dashboard...',
+                style: TextStyle(
+                  color: AppTheme.darkColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -130,13 +152,16 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           Expanded(child: _buildMainContent()),
         ],
       ),
-      bottomNavigationBar: JobSeekerBottomNav(
-        currentIndex: _currentNavIndex,
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-          _handleBottomNavTap(index);
-        },
-      ),
+      bottomNavigationBar: _profile != null
+          ? JobSeekerBottomNav(
+              currentIndex: _currentNavIndex,
+              seekerEmail: _profile!.email,
+              onTap: (index) {
+                setState(() => _currentNavIndex = index);
+                _handleBottomNavTap(index);
+              },
+            )
+          : null,
     );
   }
 
@@ -150,7 +175,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           colors: [
             AppTheme.primaryColor,
             AppTheme.secondaryColor,
-            AppTheme.primaryColor.withValues(alpha: 0.8), 
+            AppTheme.primaryColor.withValues(alpha: 0.8),
           ],
         ),
       ),
@@ -177,7 +202,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15), 
+            color: Colors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.work_outline, color: Colors.white, size: 24),
@@ -188,14 +213,18 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15), 
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3), 
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
-            child: const Icon(Icons.person_outline, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.person_outline,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
         ),
       ],
@@ -204,7 +233,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
 
   Widget _buildWelcomeSection() {
     final greeting = _getGreeting();
-    final userName = (_profile?.fullName ?? 'there').split(' ').first; 
+    final userName = (_profile?.fullName ?? 'there').split(' ').first;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +257,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
                   Text(
                     'Let\'s find your perfect job',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9), 
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
                     ),
@@ -250,7 +279,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15), 
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -274,11 +303,18 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
             ),
           ),
           suffixIcon: IconButton(
-            icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600, size: 20),
+            icon: Icon(
+              Icons.tune_rounded,
+              color: Colors.grey.shade600,
+              size: 20,
+            ),
             onPressed: () => _searchJobs(),
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 17,
+          ),
         ),
         textInputAction: TextInputAction.search,
         onSubmitted: (q) => _searchJobs(query: q),
@@ -290,7 +326,10 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
       ),
       child: RefreshIndicator(
         onRefresh: _refresh,
@@ -344,8 +383,27 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 40),
-        children: const [
-          Center(child: LoadingIndicator(size: 32)),
+        children: [
+          Center(
+            child: Column(
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppTheme.primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Finding jobs for you...',
+                  style: TextStyle(
+                    color: AppTheme.darkColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       );
     }
@@ -354,7 +412,7 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        children: [ _buildEmptyState() ],
+        children: [_buildEmptyState()],
       );
     }
 
@@ -378,20 +436,32 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.1), 
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.work_outline_rounded, size: 64, color: AppTheme.primaryColor),
+            child: Icon(
+              Icons.work_outline_rounded,
+              size: 64,
+              color: AppTheme.primaryColor,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
             'No jobs found',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.darkColor),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.darkColor,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Try a different search term or pull to refresh',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.4),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+              height: 1.4,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -416,12 +486,27 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   void _handleBottomNavTap(int index) {
     switch (index) {
       case 0:
+        // Already on dashboard, do nothing
         break;
       case 1:
-        Navigator.pushNamed(context, AppConstants.roadmapRoute);
+        // Reset to home index before navigating
+        setState(() => _currentNavIndex = 0);
+        Navigator.pushNamed(context, AppConstants.roadmapRoute).then((_) {
+          // Reset to home when returning from roadmap
+          if (mounted) {
+            setState(() => _currentNavIndex = 0);
+          }
+        });
         break;
       case 2:
-        Navigator.pushNamed(context, AppConstants.profileRoute);
+        // Reset to home index before navigating
+        setState(() => _currentNavIndex = 0);
+        Navigator.pushNamed(context, AppConstants.profileRoute).then((_) {
+          // Reset to home when returning from profile
+          if (mounted) {
+            setState(() => _currentNavIndex = 0);
+          }
+        });
         break;
     }
   }

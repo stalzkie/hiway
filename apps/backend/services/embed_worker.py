@@ -5,7 +5,7 @@ import os
 import time
 import hashlib
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from importlib import import_module
 from pathlib import Path
@@ -94,6 +94,9 @@ SLEEP = int(os.getenv("EMBED_SLEEP", "5"))  # seconds between polls
 E5_USE_PREFIX = os.getenv("E5_USE_PREFIX", "1") == "1"
 E5_PASSAGE_PREFIX = os.getenv("E5_PASSAGE_PREFIX", "passage: ")
 
+# Optional: toggle attaching sparse vectors (defaults to on)
+ENABLE_SPARSE = os.getenv("ENABLE_SPARSE", "1") == "1"
+
 # ---------------------- Env validation (nice errors) ----------------------
 def _require_env() -> None:
     missing = [k for k in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "PINECONE_API_KEY") if not os.getenv(k)]
@@ -138,6 +141,49 @@ def _init_pinecone():
 
 index = _init_pinecone()
 model = SentenceTransformer(EMBED_MODEL_NAME)
+
+# ---------------------- Hybrid (BM25) encoder for sparse vectors ----------------------
+try:
+    from pinecone_text.sparse import BM25Encoder
+except Exception:
+    BM25Encoder = None  # type: ignore
+
+_BM25: Optional["BM25Encoder"] = None
+
+def _fit_bm25_from_db() -> None:
+    """
+    Fit a BM25 encoder on your current job_post corpus (search_document).
+    Called at startup. If pinecone-text isn't installed or ENABLE_SPARSE=0,
+    this is a no-op and the worker runs dense-only.
+    """
+    global _BM25
+    if not ENABLE_SPARSE:
+        print("[DIAG] ENABLE_SPARSE=0; skipping BM25 fit (dense-only upserts)")
+        _BM25 = None
+        return
+
+    if BM25Encoder is None:
+        print("[DIAG] pinecone-text not installed; skipping BM25 fit (dense-only upserts)")
+        _BM25 = None
+        return
+
+    try:
+        res = sb.table("job_post").select("search_document").limit(100000).execute()
+        corpus = [(r.get("search_document") or "") for r in (res.data or [])]
+        enc = BM25Encoder()
+        enc.fit(corpus)
+        _BM25 = enc
+        print(f"[DIAG] BM25 fitted on {len(corpus)} job_post documents")
+    except Exception as e:
+        print(f"[WARN] BM25 fit failed: {e}")
+        _BM25 = None
+
+def _bm25_encode_doc(text: str):
+    """Return Pinecone sparse values for a document text (BM25)."""
+    if _BM25 is None:
+        return None
+    sv = _BM25.encode_documents([text or ""])[0]
+    return {"indices": sv["indices"], "values": sv["values"]}
 
 # ---------------------- Small utils ----------------------
 def _now_iso() -> str:
@@ -208,7 +254,7 @@ def upsert_job_seeker_vectors(js: Dict[str, Any]) -> None:
             }
         })
 
-    # Upsert to Pinecone
+    # Upsert to Pinecone (seekers are dense-only; sparse not needed for queries)
     try:
         index.upsert(vectors=vectors, namespace=JOB_SEEKERS_NAMESPACE)
     except Exception as e:
@@ -293,13 +339,18 @@ def build_job_post_section_texts(row: Dict[str, Any]) -> Dict[str, str]:
     }
 
 def upsert_job_post_vectors(post: Dict[str, Any]) -> None:
+    """
+    Upsert job post per-section vectors. Includes dense 'values' and, if available,
+    BM25 'sparse_values' so Pinecone Hybrid queries can leverage lexical rarity.
+    """
     pid = post["job_post_id"]
     sections = build_job_post_section_texts(post)
 
     vectors = []
     for scope, text in sections.items():
         vec = embed_passage(text)
-        vectors.append({
+
+        item: Dict[str, Any] = {
             "id": f"{pid}:{scope}",
             "values": vec,
             "metadata": {
@@ -308,7 +359,15 @@ def upsert_job_post_vectors(post: Dict[str, Any]) -> None:
                 "posted_by": (post.get("posted_by") or ""),
                 "updated_at": post.get("updated_at"),
             }
-        })
+        }
+
+        # Attach sparse BM25 ONLY for job posts (targets)
+        if ENABLE_SPARSE and _BM25 is not None:
+            sparse = _bm25_encode_doc(text)
+            if sparse and sparse.get("values"):
+                item["sparse_values"] = sparse  # Pinecone 3.x snake_case
+
+        vectors.append(item)
 
     try:
         index.upsert(vectors=vectors, namespace=JOB_POSTS_NAMESPACE)
@@ -389,6 +448,9 @@ def main():
         f"ns_seekers={JOB_SEEKERS_NAMESPACE} ns_posts={JOB_POSTS_NAMESPACE} "
         f"model={EMBED_MODEL_NAME}"
     )
+    # Fit BM25 on job_post corpus once (no-op if disabled/missing)
+    _fit_bm25_from_db()
+
     while True:
         c_seekers = process_job_seeker_batch()
         c_posts = process_job_post_batch()

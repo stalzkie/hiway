@@ -65,7 +65,10 @@ class AuthService {
   /// - If there is no prior score (no calculated_at) for this seeker
   /// - OR if the newest job_post (updated_at || created_at) is newer than last score
   /// - OR if the job seeker profile updated_at is newer than last score
-  Future<bool> _shouldRunMatcher(String jobSeekerId, DateTime seekerUpdatedAt) async {
+  Future<bool> _shouldRunMatcher(
+    String jobSeekerId,
+    DateTime seekerUpdatedAt,
+  ) async {
     // 1) Get last score time for this seeker
     DateTime? lastCalculatedAt;
     try {
@@ -78,7 +81,9 @@ class AuthService {
           .maybeSingle();
 
       if (lastScoreRow != null && lastScoreRow['calculated_at'] != null) {
-        lastCalculatedAt = DateTime.parse(lastScoreRow['calculated_at'] as String);
+        lastCalculatedAt = DateTime.parse(
+          lastScoreRow['calculated_at'] as String,
+        );
       }
     } catch (_) {
       // Ignore read errors; treat as if no score exists.
@@ -99,7 +104,8 @@ class AuthService {
           .maybeSingle();
 
       String? ts =
-          (newestPostRow?['updated_at'] as String?) ?? (newestPostRow?['created_at'] as String?);
+          (newestPostRow?['updated_at'] as String?) ??
+          (newestPostRow?['created_at'] as String?);
       if (ts != null) {
         newestJobPost = DateTime.parse(ts);
       }
@@ -123,7 +129,10 @@ class AuthService {
       final seeker = await getJobSeekerProfile();
       if (seeker == null) return; // not a seeker; nothing to do
 
-      final needsRun = await _shouldRunMatcher(seeker.jobSeekerId, seeker.updatedAt);
+      final needsRun = await _shouldRunMatcher(
+        seeker.jobSeekerId,
+        seeker.updatedAt,
+      );
       if (needsRun) {
         await _runMatcherFastApi(jobSeekerId: seeker.jobSeekerId);
       }
@@ -369,7 +378,9 @@ class AuthService {
   Future<EmployerModel?> getEmployerProfile() async {
     try {
       final user = currentUser;
-      if (user == null) return null;
+      if (user == null) {
+        return null;
+      }
 
       final response = await _client
           .from(AppConstants.employerTable)
@@ -377,7 +388,10 @@ class AuthService {
           .eq('auth_user_id', user.id)
           .maybeSingle();
 
-      if (response == null) return null;
+      if (response == null) {
+        return null;
+      }
+
       return EmployerModel.fromJson(response);
     } catch (e) {
       return null;
