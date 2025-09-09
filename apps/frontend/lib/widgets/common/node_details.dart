@@ -32,16 +32,20 @@ class RoadmapStepOverlay extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(
                     Icons.label_important,
-                    size: 18,
+                    size: 10,
                     color: Colors.blueAccent,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    item['title'] ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: Text(
+                      item['title'] ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      softWrap: true,
+                    ),
                   ),
                 ],
               ),
@@ -57,6 +61,9 @@ class RoadmapStepOverlay extends StatelessWidget {
                       color: Colors.blue,
                       decoration: TextDecoration.underline,
                     ),
+                    softWrap: true,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                   ),
                 ),
             ],
@@ -84,6 +91,7 @@ class RoadmapStepOverlay extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         Icons.flag,
@@ -91,11 +99,14 @@ class RoadmapStepOverlay extends StatelessWidget {
                         color: Colors.deepPurple,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        step.label,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: Text(
+                          step.label,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          softWrap: true,
                         ),
                       ),
                     ],

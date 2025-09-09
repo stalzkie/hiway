@@ -151,13 +151,16 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
           Expanded(child: _buildMainContent()),
         ],
       ),
-      bottomNavigationBar: JobSeekerBottomNav(
-        currentIndex: _currentNavIndex,
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-          _handleBottomNavTap(index);
-        },
-      ),
+      bottomNavigationBar: _profile != null
+          ? JobSeekerBottomNav(
+              currentIndex: _currentNavIndex,
+              seekerEmail: _profile!.email,
+              onTap: (index) {
+                setState(() => _currentNavIndex = index);
+                _handleBottomNavTap(index);
+              },
+            )
+          : null,
     );
   }
 

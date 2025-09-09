@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
+import 'package:hiway_app/pages/job_seeker/role_to_roadmap.dart';
 
 class JobSeekerBottomNav extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final String seekerEmail; // add email so Roadmap can resolve the seeker
 
   const JobSeekerBottomNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    required this.seekerEmail,
   });
 
   @override
@@ -48,7 +51,12 @@ class JobSeekerBottomNav extends StatelessWidget {
                 label: 'Roadmap',
                 index: 1,
                 isSelected: currentIndex == 1,
-                onTap: () => onTap(1),
+                onTap: () {
+                  // Instead of just onTap(1), push the RoleToRoadmapScreen
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => RoleToRoadmapScreen(email: seekerEmail),
+                  ));
+                },
               ),
               _buildNavItem(
                 icon: Icons.person_outline_rounded,
@@ -83,7 +91,6 @@ class JobSeekerBottomNav extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon container with improved styling
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
@@ -122,7 +129,6 @@ class JobSeekerBottomNav extends StatelessWidget {
     IconData? activeIcon,
   ) {
     if (customIcon != null) {
-      // Custom image icon (for roadmap)
       return SizedBox(
         width: 40,
         height: 30,
@@ -145,7 +151,6 @@ class JobSeekerBottomNav extends StatelessWidget {
         color: isSelected ? AppTheme.primaryColor : Colors.grey[600],
       );
     } else {
-      // Fallback
       return Icon(Icons.help_outline, size: 22, color: Colors.grey[600]);
     }
   }
