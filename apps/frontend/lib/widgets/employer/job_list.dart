@@ -66,10 +66,6 @@ class JobEmptyState extends StatelessWidget {
         message = 'No active job posts yet.\nCreate your first job posting!';
         icon = Icons.work_outline;
         break;
-      case 'draft':
-        message = 'No draft jobs.\nSave incomplete posts as drafts.';
-        icon = Icons.drafts;
-        break;
       case 'closed':
         message = 'No closed jobs.\nCompleted jobs will appear here.';
         icon = Icons.archive_outlined;

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
-
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/core/constants/app_constants.dart';
+import 'package:hiway_app/widgets/profile/profile_section.dart';
+import 'package:hiway_app/widgets/profile/info_card.dart';
 
-/// Employer Profile Page - Single Responsibility Principle
 class EmployerProfilePage extends StatefulWidget {
   const EmployerProfilePage({super.key});
 
@@ -12,27 +13,17 @@ class EmployerProfilePage extends StatefulWidget {
   State<EmployerProfilePage> createState() => _EmployerProfilePageState();
 }
 
-class _EmployerProfilePageState extends State<EmployerProfilePage>
-    with SingleTickerProviderStateMixin {
+class _EmployerProfilePageState extends State<EmployerProfilePage> {
   final AuthService _authService = AuthService();
-  late TabController _tabController;
   EmployerModel? _profile;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _loadProfile();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  /// Load employer profile
   Future<void> _loadProfile() async {
     try {
       final profile = await _authService.getEmployerProfile();
@@ -52,14 +43,6 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
         ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
-  }
-
-  /// Refresh profile data
-  Future<void> _refreshProfile() async {
-    setState(() {
-      _isLoading = true;
-    });
-    await _loadProfile();
   }
 
   @override
@@ -176,11 +159,11 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               const SizedBox(height: 20),
-              _buildCompanyInfo(),
+              _buildProfileCompletion(),
+              const SizedBox(height: 24),
+              _buildPersonalInformation(),
               const SizedBox(height: 20),
-              _buildSettingsSection(),
-              const SizedBox(height: 20),
-              _buildSecuritySection(),
+              _buildCompanyInformation(),
             ]),
           ),
         ),
@@ -190,25 +173,19 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
 
   Widget _buildSliverAppBar() {
     return SliverAppBar(
+      automaticallyImplyLeading: false,
       expandedHeight: 200,
       pinned: true,
       backgroundColor: AppTheme.primaryColor,
       foregroundColor: Colors.white,
       elevation: 0,
+      actions: [_buildMenuButton()],
       flexibleSpace: FlexibleSpaceBar(
-        title: Text(
-          _profile?.company ?? 'Company Profile',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [AppTheme.primaryColor, AppTheme.secondaryColor],
             ),
           ),
@@ -216,100 +193,115 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.business,
-                          color: Colors.white,
-                          size: 28,
-                        ),
+                  const SizedBox(height: 40), // Account for app bar height
+                  _buildProfileAvatar(),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: Text(
+                      _profile?.company ?? 'Company Name',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _profile?.company ?? 'Company Name',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _profile?.companyEmail ?? 'company@example.com',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 4),
+                  Flexible(
+                    child: Text(
+                      _profile?.companyEmail ?? 'company@example.com',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
           ),
         ),
       ),
-      actions: [_buildMenuButton()],
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+      ),
+      child: const Icon(Icons.business_rounded, size: 40, color: Colors.white),
     );
   }
 
   Widget _buildMenuButton() {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      onSelected: _handleMenuAction,
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: 'refresh',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('Refresh'),
-            contentPadding: EdgeInsets.zero,
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert_rounded),
+        iconSize: 24,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onSelected: _handleMenuAction,
+        itemBuilder: (context) => [
+          _buildMenuItem(
+            Icons.logout_rounded,
+            'Sign Out',
+            'logout',
+            isDestructive: true,
           ),
-        ),
-        const PopupMenuItem(
-          value: 'settings',
-          child: ListTile(
-            leading: Icon(Icons.settings),
-            title: Text('Settings'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'logout',
-          child: ListTile(
-            leading: Icon(Icons.logout, color: Colors.red),
-            title: Text('Sign Out', style: TextStyle(color: Colors.red)),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildCompanyInfo() {
+  PopupMenuItem<String> _buildMenuItem(
+    IconData icon,
+    String title,
+    String value, {
+    bool isDestructive = false,
+  }) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: isDestructive ? AppTheme.errorColor : Colors.grey[700],
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: isDestructive ? AppTheme.errorColor : Colors.grey[800],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCompletion() {
+    final completionPercentage = _calculateProfileCompletion();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -317,263 +309,139 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Company Information',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow(
-            Icons.business,
-            'Company',
-            _profile?.company ?? 'Not specified',
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-            Icons.person,
-            'Contact Person',
-            _profile?.name ?? 'Not specified',
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-            Icons.work,
-            'Position',
-            _profile?.companyPosition ?? 'Not specified',
-          ),
-          const SizedBox(height: 12),
-          _buildInfoRow(
-            Icons.email,
-            'Company Email',
-            _profile?.companyEmail ?? 'Not specified',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.grey.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 16, color: Colors.grey[600]),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
+              Icon(
+                Icons.analytics_outlined,
+                color: AppTheme.primaryColor,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
               Text(
-                label,
+                'Profile Completion',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.darkColor,
                 ),
               ),
-              const SizedBox(height: 2),
+              const Spacer(),
               Text(
-                value,
+                '$completionPercentage%',
                 style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.darkColor,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _getCompletionColor(completionPercentage),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          LinearProgressIndicator(
+            value: completionPercentage / 100,
+            backgroundColor: Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation(
+              _getCompletionColor(completionPercentage),
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _getCompletionMessage(completionPercentage),
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _calculateProfileCompletion() {
+    final fields = [
+      _profile?.name?.isNotEmpty == true,
+      _profile?.companyEmail?.isNotEmpty == true,
+      _profile?.company?.isNotEmpty == true,
+      _profile?.companyPosition?.isNotEmpty == true,
+    ];
+
+    final completed = fields.where((field) => field).length;
+    return ((completed / fields.length) * 100).round();
+  }
+
+  Color _getCompletionColor(int percentage) {
+    if (percentage >= 80) return AppTheme.successColor;
+    if (percentage >= 50) return AppTheme.warningColor;
+    return AppTheme.errorColor;
+  }
+
+  String _getCompletionMessage(int percentage) {
+    if (percentage >= 80) return 'Great! Your profile is almost complete.';
+    if (percentage >= 50) {
+      return 'Good progress! Add more details to stand out.';
+    }
+    return 'Complete your profile to attract top talent.';
+  }
+
+  Widget _buildPersonalInformation() {
+    return ProfileSection(
+      title: 'Personal Information',
+      icon: Icons.person_outline_rounded,
+      children: [
+        InfoCard(
+          label: 'Full Name',
+          value: _profile?.name ?? 'Not provided',
+          isEmpty: _profile?.name?.isEmpty != false,
+        ),
+        InfoCard(
+          label: 'Email',
+          value: _profile?.companyEmail ?? 'Not provided',
+          isEmpty: _profile?.companyEmail?.isEmpty != false,
+        ),
+        InfoCard(
+          label: 'Position',
+          value: _profile?.companyPosition ?? 'Not provided',
+          isEmpty: _profile?.companyPosition?.isEmpty != false,
         ),
       ],
     );
   }
 
-  Widget _buildSettingsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Settings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsItem(
-            Icons.notifications,
-            'Notifications',
-            'Manage your notification preferences',
-            () => _configureNotifications(),
-          ),
-          _buildSettingsItem(
-            Icons.location_on,
-            'Business Address',
-            'Update your business location',
-            () => _editBusinessAddress(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSecuritySection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Security',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsItem(
-            Icons.lock,
-            'Change Password',
-            'Update your account password',
-            () => _changePassword(),
-          ),
-          _buildSettingsItem(
-            Icons.security,
-            'Two-Factor Authentication',
-            'Add an extra layer of security',
-            () => _configureTwoFactor(),
-          ),
-          _buildSettingsItem(
-            Icons.logout,
-            'Sign Out',
-            'Sign out of your account',
-            () => _signOut(),
-            textColor: Colors.red,
-            iconColor: Colors.red,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsItem(
-    IconData icon,
-    String title,
-    String subtitle,
-    VoidCallback onTap, {
-    Color? textColor,
-    Color? iconColor,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: (iconColor ?? AppTheme.primaryColor).withValues(
-                  alpha: 0.1,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: iconColor ?? AppTheme.primaryColor,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: textColor ?? AppTheme.darkColor,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: Colors.grey[400]),
-          ],
+  Widget _buildCompanyInformation() {
+    return ProfileSection(
+      title: 'Company Information',
+      icon: Icons.business_outlined,
+      children: [
+        InfoCard(
+          label: 'Company Name',
+          value: _profile?.company ?? 'Not provided',
+          isEmpty: _profile?.company?.isEmpty != false,
         ),
-      ),
+      ],
     );
   }
 
   void _handleMenuAction(String action) {
-    switch (action) {
-      case 'refresh':
-        _refreshProfile();
-        break;
-      case 'settings':
-        // Navigate to settings
-        break;
-      case 'logout':
-        _signOut();
-        break;
-    }
+    if (action == 'logout') _signOut();
   }
 
   // Helper methods for various actions
-  void _signOut() async {
+  Future<void> _signOut() async {
     try {
       await _authService.signOut();
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppConstants.loginRoute,
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -586,47 +454,4 @@ class _EmployerProfilePageState extends State<EmployerProfilePage>
       }
     }
   }
-
-  void _changePassword() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Change password feature coming soon!')),
-    );
-  }
-
-  void _configureTwoFactor() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Two-factor authentication coming soon!')),
-    );
-  }
-
-  void _configureNotifications() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Notification settings coming soon!')),
-    );
-  }
-
-  void _editBusinessAddress() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Business address editing coming soon!')),
-    );
-  }
-}
-
-/// Settings item data class - Following KISS principle
-class SettingsItem {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final Widget? trailing;
-  final Color? textColor;
-
-  const SettingsItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.trailing,
-    this.textColor,
-  });
 }

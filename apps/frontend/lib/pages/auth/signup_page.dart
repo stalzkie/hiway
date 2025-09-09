@@ -4,6 +4,7 @@ import 'package:hiway_app/core/utils/error_messages.dart';
 import 'package:hiway_app/core/utils/validators.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/pages/auth/email_verification_page.dart';
+import 'package:hiway_app/pages/auth/login_page.dart';
 import 'package:hiway_app/pages/auth/profile_setup_page.dart';
 import 'package:hiway_app/widgets/common/error_display_widget.dart';
 import 'package:hiway_app/widgets/common/loading_widget.dart';
@@ -80,6 +81,12 @@ class _SignupPageState extends State<SignupPage> {
         });
       }
     }
+  }
+
+  void _navigateToLogin() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const LoginPage()));
   }
 
   @override
@@ -204,16 +211,35 @@ class _SignupPageState extends State<SignupPage> {
                       onFieldSubmitted: (_) => _signUp(),
                     ),
                     const SizedBox(height: 32),
+
+                    // Sign In Button
                     LoadingButton(
                       onPressed: _signUp,
                       isLoading: _isLoading,
-                      child: const Text('Continue'),
+                      child: const Text('Sign In'),
                     ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => Navigator.of(context).pop(),
+
+                    const SizedBox(height: 24),
+
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'or',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey[600]),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    OutlinedButton(
+                      onPressed: _isLoading ? null : _navigateToLogin,
                       child: const Text('Already have an account? Sign In'),
                     ),
                   ],

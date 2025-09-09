@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
-import 'package:hiway_app/widgets/employer/layout_widgets.dart';
+
 import 'package:hiway_app/widgets/employer/pages.dart';
 import 'package:hiway_app/pages/employer/jobs.dart' as employer_jobs;
-import 'package:hiway_app/widgets/employer/company_profile.dart';
+import 'package:hiway_app/pages/employer/profile.dart';
 import 'package:hiway_app/widgets/employer/job_actions.dart';
 
 class EmployerDashboard extends StatefulWidget {
@@ -19,7 +19,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     with JobActionsMixin {
   final AuthService _authService = AuthService();
   final TextEditingController _searchController = TextEditingController();
-  
+
   EmployerModel? _profile;
   bool _isLoading = true;
   int _currentNavIndex = 0;
@@ -50,9 +50,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -85,35 +85,6 @@ class _EmployerDashboardState extends State<EmployerDashboard>
     }
   }
 
-  void _handleViewJobs() {
-    _showFeatureComingSoon('Jobs Management - Please use the Jobs tab');
-  }
-
-  void _handleViewCandidates() {
-    _showFeatureComingSoon('Browse Candidates');
-  }
-
-  void _handleMessages() {
-    _showFeatureComingSoon('Messages');
-  }
-
-  void _handleEditProfile() {
-    _showFeatureComingSoon('Edit Profile');
-  }
-
-  void _handleUploadDocuments() {
-    _showFeatureComingSoon('Document Upload');
-  }
-
-  void _showFeatureComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature feature coming soon!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -124,7 +95,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -141,39 +114,36 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       );
     }
 
-    // Check current navigation index to show different content
-    if (_currentNavIndex == 0) {
-      // Dashboard with hero section
-      return Scaffold(
-        backgroundColor: AppTheme.backgroundColor,
-        body: Column(
+    // Main dashboard with navigation
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      body: _getCurrentPage(),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _getCurrentPage() {
+    switch (_currentNavIndex) {
+      case 0:
+        return Column(
           children: [
             _buildHeroSection(),
             Expanded(child: _buildMainContent()),
           ],
-        ),
-        bottomNavigationBar: _buildBottomNav(),
-      );
-    } else {
-      // Other pages using EmployerLayout
-      return EmployerLayout(
-        pages: [
-          _buildDashboardContent(),
-          employer_jobs.JobsPage(profile: _profile),
-          const CandidatesPage(),
-          CompanyProfilePage(
-            profile: _profile,
-            onEditProfile: _handleEditProfile,
-            onUploadDocuments: _handleUploadDocuments,
-          ),
-        ],
-        pageTitles: const [
-          'Dashboard',
-          'My Jobs',
-          'Candidates',
-          'Company Profile',
-        ],
-      );
+        );
+      case 1:
+        return employer_jobs.JobsPage(profile: _profile);
+      case 2:
+        return const CandidatesPage();
+      case 3:
+        return const EmployerProfilePage();
+      default:
+        return Column(
+          children: [
+            _buildHeroSection(),
+            Expanded(child: _buildMainContent()),
+          ],
+        );
     }
   }
 
@@ -217,7 +187,11 @@ class _EmployerDashboardState extends State<EmployerDashboard>
             color: Colors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.business_outlined, color: Colors.white, size: 24),
+          child: const Icon(
+            Icons.business_outlined,
+            color: Colors.white,
+            size: 24,
+          ),
         ),
         const Spacer(),
         GestureDetector(
@@ -320,6 +294,9 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               color: Colors.grey.shade600,
               size: 20,
             ),
+            iconSize: 20,
+            padding: const EdgeInsets.all(16),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: () => _searchCandidates(),
           ),
           border: InputBorder.none,
@@ -344,13 +321,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         ),
       ),
       child: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildSectionHeader(),
-            _buildQuickActions(),
-            _buildRecentStats(),
-          ],
-        ),
+        child: Column(children: [_buildSectionHeader(), _buildQuickActions()]),
       ),
     );
   }
@@ -412,28 +383,6 @@ class _EmployerDashboardState extends State<EmployerDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionCard(
-                  icon: Icons.work_outline,
-                  title: 'Manage Jobs',
-                  subtitle: 'Edit your listings',
-                  onTap: () => _handleBottomNavTap(1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionCard(
-                  icon: Icons.message_outlined,
-                  title: 'Messages',
-                  subtitle: 'Chat with candidates',
-                  onTap: _handleMessages,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -470,11 +419,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
                 color: AppTheme.primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
-                icon,
-                color: AppTheme.primaryColor,
-                size: 24,
-              ),
+              child: Icon(icon, color: AppTheme.primaryColor, size: 24),
             ),
             const SizedBox(height: 12),
             Text(
@@ -488,98 +433,17 @@ class _EmployerDashboardState extends State<EmployerDashboard>
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildRecentStats() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.primaryColor.withValues(alpha: 0.1),
-              AppTheme.secondaryColor.withValues(alpha: 0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recent Activity',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkColor,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem('Active Jobs', '0', Icons.work_outline),
-                ),
-                Expanded(
-                  child: _buildStatItem('Applications', '0', Icons.people_outline),
-                ),
-                Expanded(
-                  child: _buildStatItem('Messages', '0', Icons.message_outlined),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: AppTheme.primaryColor,
-          size: 32,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.darkColor,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
     );
   }
 
   Widget _buildBottomNav() {
     return Container(
-      height: 80,
+      height: 85,
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -594,42 +458,59 @@ class _EmployerDashboardState extends State<EmployerDashboard>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+            _buildNavItem(
+              0,
+              Icons.dashboard_outlined,
+              Icons.dashboard,
+              'Dashboard',
+            ),
             _buildNavItem(1, Icons.work_outline, Icons.work, 'Jobs'),
             _buildNavItem(2, Icons.people_outline, Icons.people, 'Candidates'),
-            _buildNavItem(3, Icons.business_outlined, Icons.business, 'Profile'),
+            _buildNavItem(
+              3,
+              Icons.business_outlined,
+              Icons.business,
+              'Profile',
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData outlinedIcon, IconData filledIcon, String label) {
+  Widget _buildNavItem(
+    int index,
+    IconData outlinedIcon,
+    IconData filledIcon,
+    String label,
+  ) {
     final isActive = _currentNavIndex == index;
     return GestureDetector(
       onTap: () => _handleBottomNavTap(index),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: isActive ? AppTheme.primaryColor.withValues(alpha: 0.1) : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                color: isActive
+                    ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(
                 isActive ? filledIcon : outlinedIcon,
                 color: isActive ? AppTheme.primaryColor : Colors.grey.shade600,
-                size: 24,
+                size: 18,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 1),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 9,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: isActive ? AppTheme.primaryColor : Colors.grey.shade600,
               ),
@@ -637,16 +518,6 @@ class _EmployerDashboardState extends State<EmployerDashboard>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildDashboardContent() {
-    return DashboardOverviewPage(
-      profile: _profile,
-      onPostJobTap: _handlePostJob,
-      onViewJobsTap: _handleViewJobs,
-      onViewCandidatesTap: _handleViewCandidates,
-      onMessagesTap: _handleMessages,
     );
   }
 }
