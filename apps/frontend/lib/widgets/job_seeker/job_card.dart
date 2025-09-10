@@ -340,9 +340,9 @@ class JobCard extends StatelessWidget {
   // ---------------- Logic helpers ----------------
 
   Color _getScoreColor(int score) {
-    if (score >= 85) return AppTheme.successColor;
-    if (score >= 70) return AppTheme.warningColor;
-    if (score >= 50) return Colors.orange;
+    if (score >= 70) return AppTheme.successColor;
+    if (score >= 50) return AppTheme.warningColor;
+    if (score >= 30) return Colors.orange;
     return AppTheme.errorColor;
   }
 
