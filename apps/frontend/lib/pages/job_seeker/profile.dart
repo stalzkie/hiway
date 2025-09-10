@@ -399,9 +399,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     return ProfileSection(
       title: 'Personal Information',
       icon: Icons.person_outline_rounded,
-      onEdit: () {
-        // TODO: Handle edit personal info
-      },
       children: [
         InfoCard(label: 'Full Name', value: _profile!.fullName),
         InfoCard(label: 'Email', value: _profile!.email),
@@ -427,9 +424,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     return ProfileSection(
       title: 'Work Experience',
       icon: Icons.work_outline_rounded,
-      onEdit: () {
-        // TODO: Handle edit work experience
-      },
       children: _profile!.experience.isEmpty
           ? [
               const EmptyStateCard(
@@ -447,9 +441,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     return ProfileSection(
       title: 'Education',
       icon: Icons.school_outlined,
-      onEdit: () {
-        // TODO: Handle edit education
-      },
       children: _profile!.education.isEmpty
           ? [
               const EmptyStateCard(
@@ -467,9 +458,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     return ProfileSection(
       title: 'Skills',
       icon: Icons.psychology_outlined,
-      onEdit: () {
-        // TODO: Handle edit skills
-      },
       children: [
         if (_profile!.skills.isEmpty)
           const EmptyStateCard(
@@ -499,9 +487,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     return ProfileSection(
       title: 'Licenses & Certifications',
       icon: Icons.verified_outlined,
-      onEdit: () {
-        // TODO: Handle edit licenses
-      },
       children: _profile!.licensesCertifications.isEmpty
           ? [
               const EmptyStateCard(

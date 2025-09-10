@@ -32,7 +32,6 @@ class LoadingIndicator extends StatelessWidget {
   }
 }
 
-/// Smooth animated loading widget with slide and fade animations
 class LoadingWidget extends StatefulWidget {
   final Widget nextScreen;
   final String? splashText;
@@ -161,7 +160,6 @@ class _LoadingWidgetState extends State<LoadingWidget>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Sliding Hiway vector logo with scale and rotation animation
             AnimatedBuilder(
               animation: Listenable.merge([
                 _slideController,
@@ -193,7 +191,6 @@ class _LoadingWidgetState extends State<LoadingWidget>
 
             const SizedBox(height: 30),
 
-            // Fading Hiway text logo with slide up effect
             AnimatedBuilder(
               animation: _fadeController,
               builder: (context, child) {
@@ -208,15 +205,6 @@ class _LoadingWidgetState extends State<LoadingWidget>
                           curve: Curves.easeOutQuart,
                         ),
                       ),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Image.asset(
-                      'assets/images/hiway text.png',
-                      width: 180,
-                      height: 60,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
                 );
               },
             ),
@@ -268,30 +256,10 @@ class LoadingOverlay extends StatelessWidget {
       color: overlayColor ?? Colors.black.withValues(alpha: 0.6),
       child: Center(
         child: Container(
-          margin: const EdgeInsets.all(32),
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Simple logo with loading indicator
-              Image.asset(
-                'assets/images/hiway-vector.png',
-                width: 60,
-                height: 60,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(height: 16),
               const LoadingIndicator(size: 24, strokeWidth: 2),
               if (loadingText != null) ...[
                 const SizedBox(height: 16),

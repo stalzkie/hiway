@@ -67,15 +67,6 @@ class JobPostService {
         // Removed job_type, deadline, and status as they don't exist in the database schema
       };
 
-      // Debug: Log search document for verification
-      final searchDoc = jobData['search_document'] as String;
-      print('🔍 DEBUG: Generated search document (${searchDoc.length} chars):');
-      print(
-        searchDoc.length > 200
-            ? '${searchDoc.substring(0, 200)}...'
-            : searchDoc,
-      );
-
       final response = await _client
           .from(_tableName)
           .insert(jobData)
@@ -253,15 +244,10 @@ class JobPostService {
     int? offset = 0,
   }) async {
     try {
-      print('🔍 DEBUG: Getting employer job posts...');
-
       final employer = await _authService.getEmployerProfile();
       if (employer == null) {
-        print('❌ DEBUG: No employer profile found');
         throw AuthException('No employer profile found');
       }
-
-      print('👤 DEBUG: Employer ID: ${employer.employerId}');
 
       var query = _client
           .from(_tableName)
@@ -277,31 +263,20 @@ class JobPostService {
         query = query.range(offset, offset + (limit ?? 50) - 1);
       }
 
-      print('🔍 DEBUG: Executing job posts query...');
       final response = await query;
 
       final jobList = (response as List)
           .map((job) => JobPostModel.fromJson(job as Map<String, dynamic>))
           .toList();
 
-      print('✅ DEBUG: Found ${jobList.length} job posts for employer');
-      for (int i = 0; i < jobList.length; i++) {
-        print(
-          '📋 DEBUG: Job $i: ${jobList[i].jobTitle} (${jobList[i].jobPostId})',
-        );
-      }
-
       return jobList;
     } on PostgrestException catch (e) {
-      print('❌ DEBUG: Database error: ${e.message}');
       throw DatabaseException(
         'Failed to fetch employer job posts: ${e.message}',
       );
-    } on AuthException catch (e) {
-      print('❌ DEBUG: Auth error: ${e.message}');
+    } on AuthException {
       rethrow;
     } catch (e) {
-      print('❌ DEBUG: Unexpected error: $e');
       throw DatabaseException('Failed to fetch employer job posts: $e');
     }
   }
@@ -532,15 +507,10 @@ class JobPostService {
           'reason': operationType, 
           'enqueued_at': DateTime.now().toIso8601String(),
         });
-
-        print('✅ Embedding queued for job post: $jobPostId');
       } else {
-        print('📝 Embedding already queued for job post: $jobPostId');
+        // Already queued, no action needed
       }
     } catch (e) {
-      print(
-        '⚠️ Warning: Could not queue embedding for job post $jobPostId: $e',
-      );
       // Don't throw - embedding is nice-to-have, not critical for basic functionality
     }
   }
@@ -561,9 +531,6 @@ class JobPostService {
       }
       return null;
     } catch (e) {
-      print(
-        '⚠️ Warning: Could not check embedding status for job post $jobPostId: $e',
-      );
       return null;
     }
   }

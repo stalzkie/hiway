@@ -199,14 +199,6 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.work_outline, color: Colors.white, size: 24),
-        ),
         const Spacer(),
         GestureDetector(
           onTap: () => _handleBottomNavTap(2),
@@ -382,26 +374,31 @@ class _JobSeekerDashboardState extends State<JobSeekerDashboard> {
     if (_isLoadingJobs) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 40),
         children: [
-          Center(
-            child: Column(
-              children: [
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppTheme.primaryColor,
+          SizedBox(
+            height:
+                MediaQuery.of(context).size.height *
+                0.4, // Take up more vertical space
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppTheme.primaryColor,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Finding jobs for you...',
-                  style: TextStyle(
-                    color: AppTheme.darkColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Finding jobs for you...',
+                    style: TextStyle(
+                      color: AppTheme.darkColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
