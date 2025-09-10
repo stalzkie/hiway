@@ -76,7 +76,6 @@ starlette==0.47.3
 storage3==0.12.1
 StrEnum==0.4.15
 supabase==2.18.1
-supabase_auth==2.12.3
 supabase_functions==0.10.1
 sympy==1.14.0
 threadpoolctl==3.6.0

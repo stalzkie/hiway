@@ -185,7 +185,10 @@ class _JobPostFormState extends State<JobPostForm> {
               const SizedBox(height: 24),
 
               // Salary Section
-              _buildSectionHeader('Salary Information', Icons.attach_money),
+              _buildSectionHeader(
+                'Salary Information',
+                Icons.payments_outlined,
+              ),
               const SizedBox(height: 16),
 
               Row(
@@ -253,9 +256,9 @@ class _JobPostFormState extends State<JobPostForm> {
 
               _buildFormField(
                 controller: _educationController,
-                label: 'Education Requirements',
+                label: 'Education Requirements (Optional)',
                 hint:
-                    'Bachelor\'s in Computer Science, IT-related degree (separate with commas)',
+                    'e.g., Bachelor\'s in Computer Science, IT-related degree (separate with commas)',
                 prefixIcon: Icons.school,
                 maxLines: 2,
               ),
@@ -264,8 +267,9 @@ class _JobPostFormState extends State<JobPostForm> {
 
               _buildFormField(
                 controller: _licensesController,
-                label: 'Licenses/Certifications',
-                hint: 'PMP Certification, AWS Certified (separate with commas)',
+                label: 'Licenses/Certifications (Optional)',
+                hint:
+                    'e.g., PMP Certification, AWS Certified (separate with commas)',
                 prefixIcon: Icons.verified,
                 maxLines: 2,
               ),

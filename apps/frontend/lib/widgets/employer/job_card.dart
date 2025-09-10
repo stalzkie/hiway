@@ -102,19 +102,43 @@ class JobCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(width: 16),
-                  Icon(
-                    Icons.attach_money,
-                    size: 16,
-                    color: Colors.grey.shade600,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    job.formattedSalary,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          'PHP',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppTheme.primaryColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        job.formattedSalary,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                   const Spacer(),
                   Text(
-                    '${job.daysSincePosted} days ago',
+                    job.timeSincePosted,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.grey.shade500,
                     ),
@@ -282,11 +306,6 @@ class JobStatusChip extends StatelessWidget {
         backgroundColor = Colors.green.shade100;
         textColor = Colors.green.shade800;
         displayText = 'Active';
-        break;
-      case 'draft':
-        backgroundColor = Colors.orange.shade100;
-        textColor = Colors.orange.shade800;
-        displayText = 'Draft';
         break;
       case 'closed':
         backgroundColor = Colors.grey.shade200;

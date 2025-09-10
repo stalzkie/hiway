@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 
-/// Job Detail Dialog - Shows complete job information
 class JobDetailDialog extends StatelessWidget {
   final JobPostModel job;
 
@@ -93,12 +92,11 @@ class JobDetailDialog extends StatelessWidget {
                       'Full-time',
                     ), // Default since not in database
                     _buildInfoRow('Salary', job.formattedSalary),
-                    // Removed deadline since it doesn't exist in database
                     _buildInfoRow(
                       'Status',
                       'Active',
                     ), // Default since not in database
-                    _buildInfoRow('Posted', '${job.daysSincePosted} days ago'),
+                    _buildInfoRow('Posted', job.timeSincePosted),
 
                     const SizedBox(height: 24),
 

@@ -15,36 +15,91 @@ class ApplicationService {
   final String _apiBase;
 
   /// Apply for a job (calls FastAPI `/applications/apply`)
-  Future<String?> applyForJob({
-    required String job_post_id,
-    required String job_seeker_id,
-    required String employer_id,
-    double? matchConfidence,
-    Map<String, dynamic>? matchSnapshot,
-    String? resumeUrl,
-    required String bearerToken,
+  ///// deprecrated
+  // Future<String?> applyForJob({ 
+  //   required String job_post_id,
+  //   required String job_seeker_id,
+  //   required String employer_id,
+  //   double? matchConfidence,
+  //   Map<String, dynamic>? matchSnapshot,
+  //   String? resumeUrl,
+  //   required String bearerToken,
+  // }) async {
+  //   final uri = Uri.parse('$_apiBase/applications/apply');
+  //   final resp = await http.post(
+  //     uri,
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       'Authorization': 'Bearer $bearerToken',
+  //     },
+  //     body: jsonEncode({
+  //       'job_post_id': job_post_id,
+  //       'job_seeker_id': job_seeker_id,
+  //       'employer_id': employer_id,
+  //       if (matchConfidence != null) 'match_confidence': matchConfidence,
+  //       if (matchSnapshot != null) 'match_snapshot': matchSnapshot,
+  //       if (resumeUrl != null) 'resume_url': resumeUrl,
+  //     }),
+  //   );
+  //   if (resp.statusCode == 200) {
+  //     final data = jsonDecode(resp.body);
+  //     return data['application_id'] as String?;
+  //   } else {
+  //     throw Exception('Failed to apply: ${resp.body}');
+  //   }
+  // }
+
+  Future<void> applyForJob({
+    required BuildContext context,
+    required String jobPostId,
+    required String jobSeekerId,
+    required String employerId,
+    required double matchConfidence,
   }) async {
-    final uri = Uri.parse('$_apiBase/applications/apply');
-    final resp = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $bearerToken',
-      },
-      body: jsonEncode({
-        'job_post_id': job_post_id,
-        'job_seeker_id': job_seeker_id,
-        'employer_id': employer_id,
-        if (matchConfidence != null) 'match_confidence': matchConfidence,
-        if (matchSnapshot != null) 'match_snapshot': matchSnapshot,
-        if (resumeUrl != null) 'resume_url': resumeUrl,
-      }),
+    final url = Uri.parse(
+      'https://txgqnhsivkmthngtsqhg.supabase.co/functions/v1/create-new-job-application',
     );
-    if (resp.statusCode == 200) {
-      final data = jsonDecode(resp.body);
-      return data['application_id'] as String?;
-    } else {
-      throw Exception('Failed to apply: ${resp.body}');
+
+    try {
+      final res = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${_sb.auth.currentSession?.accessToken}',
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "job_post_id": jobPostId,
+          "job_seeker_id": jobSeekerId,
+          "employer_id": employerId,
+          "match_confidence": matchConfidence,
+        }),
+      );
+
+      if (res.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Job application submitted successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        final body = jsonDecode(res.body);
+        print("match_confidence: "+ matchConfidence.toString());
+        print(body['error'] ?? res.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("❌ Failed: ${body['error'] ?? res.body}"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("⚠️ Error: $e"),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
