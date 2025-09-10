@@ -81,7 +81,7 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
     if (s.length <= maxChars) return s;
     final cut = s.lastIndexOf(' ', maxChars);
     final end = (cut >= 10) ? cut : maxChars;
-    return s.substring(0, end).trimRight() + '…';
+    return '${s.substring(0, end).trimRight()}…';
   }
 
   double _clampDouble(double v, double min, double max) =>
@@ -353,7 +353,10 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
                           checkIcons.add(Positioned(
                             left: pos.dx - 10,
                             top: pos.dy - 10,
-                            child: const Icon(Icons.check, size: 20, color: Colors.white),
+                            child: const IgnorePointer(
+                              ignoring: true,
+                              child: Icon(Icons.check, size: 20, color: Colors.white),
+                            ),
                           ));
                         }
 
@@ -411,7 +414,7 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
 }
 
 class _TitleChipWrapper extends StatelessWidget {
-  const _TitleChipWrapper({super.key});
+  const _TitleChipWrapper();
 
   @override
   Widget build(BuildContext context) {
@@ -422,7 +425,7 @@ class _TitleChipWrapper extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 10,
             offset: const Offset(0, 3),
           )

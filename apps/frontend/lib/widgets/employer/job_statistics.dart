@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 
-/// Job Statistics Widget - displays job statistics cards
 class JobStatistics extends StatelessWidget {
   final List<JobPostModel> jobs;
   final VoidCallback? onCreateJob;
@@ -39,44 +38,8 @@ class JobStatistics extends StatelessWidget {
                   color: AppTheme.successColor,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: JobStatCard(
-                  title: 'Drafts',
-                  value: jobs
-                      .where((job) => job.status == 'draft')
-                      .length
-                      .toString(),
-                  icon: Icons.drafts,
-                  color: AppTheme.warningColor,
-                ),
-              ),
             ],
           ),
-
-          // Quick Action Button (visible when no jobs)
-          if (jobs.isEmpty && onCreateJob != null) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onCreateJob,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.add_circle),
-                label: const Text(
-                  'Post Your First Job',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );

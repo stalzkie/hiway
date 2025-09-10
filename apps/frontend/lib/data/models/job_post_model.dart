@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'job_experience_model.dart';
+import '../../core/utils/time_formatter.dart';
 
 class JobPostModel {
   final String jobPostId;
@@ -242,10 +243,15 @@ class JobPostModel {
   String get certificationsDisplayText =>
       jobLicensesCertifications?.join(', ') ?? 'Not specified';
 
-  /// Calculate days since posted
+  /// Calculate days since posted (legacy - kept for backward compatibility)
   int get daysSincePosted {
     final now = DateTime.now();
     return now.difference(createdAt).inDays;
+  }
+
+  /// Get formatted time since posted (e.g., "2h ago", "3d ago", "1w ago")
+  String get timeSincePosted {
+    return TimeFormatter.getTimeAgo(createdAt);
   }
 
   /// Check if deadline is approaching (within 7 days)
@@ -326,7 +332,7 @@ class SalaryModel {
     return {'amount': amount, 'currency': currency, 'type': type};
   }
 
-  /// Display text for UI
+  /// Display text for UI (without currency symbol for cleaner look)
   String get displayText {
     final formattedAmount = amount >= 1000
         ? '${(amount / 1000).toStringAsFixed(amount % 1000 == 0 ? 0 : 1)}K'
@@ -340,7 +346,7 @@ class SalaryModel {
       _ => '/$type',
     };
 
-    return '$currency $formattedAmount$period';
+    return '$formattedAmount$period';
   }
 
   /// Create salary range display (for min-max salaries)

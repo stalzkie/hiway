@@ -4,7 +4,6 @@ import 'package:hiway_app/widgets/employer/index.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 import 'package:hiway_app/data/services/job_post_service.dart';
-import 'package:hiway_app/widgets/employer/job_actions.dart';
 
 class JobsPage extends StatefulWidget {
   final EmployerModel? profile;
@@ -15,30 +14,23 @@ class JobsPage extends StatefulWidget {
   State<JobsPage> createState() => _JobsPageState();
 }
 
-class _JobsPageState extends State<JobsPage>
-    with SingleTickerProviderStateMixin, JobActionsMixin {
-  late TabController _tabController;
+class _JobsPageState extends State<JobsPage> with JobActionsMixin {
   final JobPostService _jobPostService = JobPostService();
+  final TextEditingController _searchController = TextEditingController();
 
   List<JobPostModel> _jobs = [];
   List<JobPostModel> _filteredJobs = [];
   bool _isLoading = false;
-  String _searchQuery = '';
-  String _selectedStatusFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 1,
-      vsync: this,
-    ); // Only one tab since no status tracking
     _loadJobs();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -50,20 +42,15 @@ class _JobsPageState extends State<JobsPage>
 
     try {
       final jobs = await _jobPostService.getEmployerJobPosts();
-      
-      if (jobs.isNotEmpty) {
-        print('🔥 DEBUG: First job: ${jobs.first.jobTitle} - ID: ${jobs.first.jobPostId}');
-      }
-      
+
       if (mounted) {
         setState(() {
           _jobs = jobs;
-          _applyFilters();
+          _applySearch();
           _isLoading = false;
         });
       }
     } catch (e) {
-      // print('🔥 DEBUG: Error loading jobs: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         showErrorSnackBar('Failed to load jobs: ${e.toString()}');
@@ -71,27 +58,27 @@ class _JobsPageState extends State<JobsPage>
     }
   }
 
-  /// Apply search and filter criteria
-  void _applyFilters() {
+  /// Apply search filter
+  void _applySearch() {
+    final query = _searchController.text.trim();
     _filteredJobs = _jobs.where((job) {
-      final matchesSearch =
-          _searchQuery.isEmpty ||
-          job.jobTitle.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          job.jobLocation.toLowerCase().contains(_searchQuery.toLowerCase());
+      if (query.isEmpty) return true;
 
-      // Since status doesn't exist in database, we'll treat all jobs as active
-      final matchesStatus =
-          _selectedStatusFilter == 'all' || _selectedStatusFilter == 'active';
-
-      return matchesSearch && matchesStatus;
+      final searchLower = query.toLowerCase();
+      return job.jobTitle.toLowerCase().contains(searchLower) ||
+          job.jobLocation.toLowerCase().contains(searchLower);
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: EmployerAppBar(
-        title: 'Jobs Management',
+      appBar: AppBar(
+        title: const Text('Jobs Management'),
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
+        elevation: 0,
         actions: [
           ElevatedButton.icon(
             onPressed: () async {
@@ -99,29 +86,60 @@ class _JobsPageState extends State<JobsPage>
               if (result == true) _loadJobs();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primaryColor,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Post Job'),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: _showFilterOptions,
-            icon: const Icon(Icons.filter_list),
-            tooltip: 'Filter Jobs',
-          ),
-          IconButton(
-            onPressed: _showSearchDialog,
-            icon: const Icon(Icons.search),
-            tooltip: 'Search Jobs',
-          ),
+          const SizedBox(width: 16),
         ],
       ),
       body: Column(
         children: [
+          // Search Bar
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search jobs by title or location...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        iconSize: 20,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _applySearch());
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+              onChanged: (value) {
+                setState(() => _applySearch());
+              },
+            ),
+          ),
+
           // Job Statistics
           JobStatistics(
             jobs: _jobs,
@@ -131,35 +149,11 @@ class _JobsPageState extends State<JobsPage>
             },
           ),
 
-          // Tab Bar - Simplified to show only active jobs
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppTheme.primaryColor,
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: AppTheme.primaryColor,
-              tabs: const [
-                Tab(text: 'All Jobs'),
-                // Removed Draft and Closed tabs since status doesn't exist in database
-              ],
-            ),
-          ),
-
-          // Tab Views
+          // Jobs List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildJobsList('active'),
-                      // Removed draft and closed views
-                    ],
-                  ),
+                : _buildJobsList(),
           ),
         ],
       ),
@@ -178,15 +172,11 @@ class _JobsPageState extends State<JobsPage>
     );
   }
 
-  /// Build jobs list for specific status
-  Widget _buildJobsList(String status) {
-    // Since status doesn't exist in database, show all jobs in 'active' tab
-    // and empty lists for 'draft' and 'closed' tabs
-    final jobs = status == 'active' ? _filteredJobs : <JobPostModel>[];
-
+  /// Build jobs list
+  Widget _buildJobsList() {
     return JobList(
-      jobs: jobs,
-      status: status,
+      jobs: _filteredJobs,
+      status: 'active',
       onRefresh: _loadJobs,
       onViewJob: _viewJobDetails,
       onEditJob: (job) async {
@@ -205,37 +195,8 @@ class _JobsPageState extends State<JobsPage>
   }
 
   void _viewJobDetails(JobPostModel job) {
-    // TODO: Navigate to job details page
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Viewing details for: ${job.jobTitle}')),
-    );
-  }
-
-  /// Show filter options
-  void _showFilterOptions() {
-    JobFilters.show(
-      context: context,
-      selectedStatusFilter: _selectedStatusFilter,
-      onStatusFilterChanged: (filter) {
-        setState(() {
-          _selectedStatusFilter = filter;
-          _applyFilters();
-        });
-      },
-    );
-  }
-
-  /// Show search dialog
-  void _showSearchDialog() {
-    JobSearchDialog.show(
-      context: context,
-      initialQuery: _searchQuery,
-      onSearchChanged: (query) {
-        setState(() {
-          _searchQuery = query;
-          _applyFilters();
-        });
-      },
     );
   }
 }

@@ -341,7 +341,7 @@ def _compose_roadmap_prompt(role: str, max_milestones: int) -> str:
     return (
         "You are designing an upskilling roadmap for a job seeker focused on the Philippines.\n"
         "TASK: Given the target ROLE, propose leveled knowledge milestones (Basic → Advanced) AND, for each milestone, make sure this roadmap is centered around the job economy of the Philippines\n"
-        "You can create only a MAX of 10 knowledge milestones and a MINIMUM of 3 knowledge milestones."
+        "You can create only a MAX of 10 knowledge milestones and a standard of 5-8 milestones. The more complicated the jobs, the more milestones.\n"
         "list EXACTLY 3 specific certificates/licenses that validate skills for that milestone.\n"
         "STRICT RULES:\n"
         "• Certificates must be SPECIFIC credential names with EXACT titles as they appear on official sites.\n"

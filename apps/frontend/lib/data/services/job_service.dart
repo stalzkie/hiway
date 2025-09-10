@@ -4,9 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 
-/// JobService
-/// - Personalized feed: pulled from your FastAPI `/match` endpoint (Suggestion 3)
-/// - Generic lists (all / trending / by id): read from Supabase
+
 class JobService {
   JobService({
     SupabaseClient? client,
@@ -24,24 +22,6 @@ class JobService {
     created_at, deadline, company_logo, is_trending
   ''';
 
-  // ---------------------------------------------------------------------------
-  // Personalized feed (from FastAPI `/match`) — Suggestion 3 applied
-  // ---------------------------------------------------------------------------
-
-  /// Recommended jobs for a specific seeker using the FastAPI `/match` endpoint.
-  /// We request `include_details=1` so the server returns `job_post` rows inline.
-  ///
-  /// Response shape expected (per your matcher):
-  /// [
-  ///   {
-  ///     "job_post_id": "...",
-  ///     "confidence": 87.34,
-  ///     "section_scores": {...},
-  ///     "job_post": { <job_post columns> },
-  ///     "analysis": {...}
-  ///   },
-  ///   ...
-  /// ]
   Future<List<JobModel>> getRecommendedJobs({
   required String jobSeekerId,
   int topKPerSection = 20,
