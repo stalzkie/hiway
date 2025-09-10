@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hiway_app/data/services/applications_service.dart';
 import 'package:hiway_app/data/services/auth_service.dart';
+import 'package:hiway_app/widgets/common/app_theme.dart';
 
 class ApplicationView extends StatefulWidget {  // Change to StatefulWidget
   final String jobID;
@@ -12,12 +13,14 @@ class ApplicationView extends StatefulWidget {  // Change to StatefulWidget
 
 class _ApplicationViewState extends State<ApplicationView> {
   String appBarTitle = 'Loading...';
+  bool isDataLoaded = false; // <-- new flag
 
   @override
   Widget build(BuildContext context) {
     final applicationService = ApplicationService(apiBase: 'https://hiway-production-ec0e.up.railway.app');
     AuthService _auth = AuthService();
     Map<String, dynamic>? listing_data;
+    String newTitle = "";
 
     String _formatDate(DateTime date) {
       final months = [
@@ -29,7 +32,7 @@ class _ApplicationViewState extends State<ApplicationView> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue,
+        backgroundColor: AppTheme.primaryColor  ,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
@@ -60,15 +63,16 @@ class _ApplicationViewState extends State<ApplicationView> {
           listing_data = data;
 
           // Update title only if it's different
-          final newTitle = data['job_post']['job_title'] ?? 'Job Details';
+          newTitle = data['job_post']['job_title'] ?? 'Job Details';
           if (appBarTitle != newTitle) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               setState(() {
                 appBarTitle = newTitle;
+                isDataLoaded = true; // <-- flag turns true
               });
             });
           }
-
+  
           return SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -172,13 +176,18 @@ class _ApplicationViewState extends State<ApplicationView> {
                                       padding: const EdgeInsets.all(16.0),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: const [
-                                          Text(
+                                        children: [
+                                          const Text(
                                             'Matching Skills',
                                             style: TextStyle(fontWeight: FontWeight.bold),
                                           ),
-                                          SizedBox(height: 8),
-                                          Text('• Python\n• JavaScript\n• React'),
+                                          const SizedBox(height: 8),
+                                          ...listing_data!['matched_skills'].map((skill) => 
+                                            Padding(
+                                              padding: const EdgeInsets.only(bottom: 4.0),
+                                              child: Text('• $skill'),
+                                            ),
+                                          ).toList(),
                                         ],
                                       ),
                                     ),
@@ -192,13 +201,18 @@ class _ApplicationViewState extends State<ApplicationView> {
                                       padding: const EdgeInsets.all(16.0),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: const [
-                                          Text(
+                                        children: [
+                                          const Text(
                                             'Missing Skills',
                                             style: TextStyle(fontWeight: FontWeight.bold),
                                           ),
-                                          SizedBox(height: 8),
-                                          Text('• TypeScript\n• Node.js'),
+                                          const SizedBox(height: 8),
+                                          ...listing_data!['missing_skills'].map((skill) => 
+                                            Padding(
+                                              padding: const EdgeInsets.only(bottom: 4.0),
+                                              child: Text('• $skill'),
+                                            ),
+                                          ).toList(),
                                         ],
                                       ),
                                     ),
@@ -210,24 +224,18 @@ class _ApplicationViewState extends State<ApplicationView> {
                           
                           const SizedBox(height: 16),
 
-                          // Wide Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {},
-                              child: const Text('View Full Match Details'),
-                            ),
-                          ),
                         ],
                       ),
                     ),
                   ),
-                  if (listing_data!["overall_summary"].isNotEmpty) 
-                  _buildInfoCard(
-                    title: 'Overall Summary',
-                    bodyText: listing_data!["overall_summary"],
-                  ),
-                  SizedBox(height:60)
+                  if (listing_data!["overall_summary"].isNotEmpty) ...{
+                    const SizedBox(height: 16),
+                    _buildInfoCard(
+                      title: 'Overall Summary',
+                      bodyText: listing_data!["overall_summary"],
+                    ),
+                    SizedBox(height:60)
+                  }
                 ],
               ),
             ),
@@ -239,21 +247,26 @@ class _ApplicationViewState extends State<ApplicationView> {
         width: MediaQuery.of(context).size.width * 0.9,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: FloatingActionButton.extended(
-          onPressed: () {
-            applicationService.applyForJob(
-              context: context,
-              jobPostId: listing_data!["job_post"]["job_post_id"],
-              jobSeekerId: listing_data!["job_seeker_id"],
-              employerId: listing_data!["job_post"]["employer"]["employer_id"],
-              matchConfidence: listing_data!["confidence"]?.toDouble() ?? 0.0,
-            );
-          },
-          backgroundColor: Colors.blue,
-          label: const Text(
-            'Apply Now',
-            style: TextStyle(color: Colors.white),
+          onPressed: isDataLoaded
+              ? () {
+                  applicationService.applyForJob(
+                    context: context,
+                    jobPostId: listing_data!["job_post"]["job_post_id"],
+                    jobSeekerId: listing_data!["job_seeker_id"],
+                    employerId: listing_data!["job_post"]["employer"]["employer_id"],
+                    matchConfidence:
+                        listing_data!["confidence"]?.toDouble() ?? 0.0,
+                  );
+                }
+              : null, // disables until loaded
+          backgroundColor: isDataLoaded
+              ? AppTheme.primaryColor
+              : AppTheme.surfaceColor,
+          label: Text(
+            isDataLoaded ? 'Apply Now' : 'Loading...',
+            style: const TextStyle(color: Colors.white),
           ),
-          icon: const Icon(Icons.send, color: Colors.white),
+          icon: isDataLoaded ? const Icon(Icons.send, color: Colors.white) : null,
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -275,6 +288,7 @@ class _ApplicationViewState extends State<ApplicationView> {
               value: progress,
               strokeWidth: 8,
               backgroundColor: Colors.grey[200],
+              color: AppTheme.successColor
             ),
           ),
           Text(
