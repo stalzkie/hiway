@@ -4,7 +4,6 @@ import 'package:hiway_app/widgets/employer/index.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 import 'package:hiway_app/data/services/job_post_service.dart';
-import 'package:hiway_app/widgets/employer/job_actions.dart';
 
 class JobsPage extends StatefulWidget {
   final EmployerModel? profile;
