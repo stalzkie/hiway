@@ -3,8 +3,8 @@ import 'package:hiway_app/data/services/auth_service.dart';
 import 'package:hiway_app/data/models/employer_model.dart';
 import 'package:hiway_app/widgets/common/app_theme.dart';
 
-import 'package:hiway_app/widgets/employer/pages.dart';
 import 'package:hiway_app/pages/employer/jobs.dart' as employer_jobs;
+import 'package:hiway_app/pages/employer/candidate.dart';
 import 'package:hiway_app/pages/employer/profile.dart';
 import 'package:hiway_app/widgets/employer/job_actions.dart';
 
@@ -134,7 +134,7 @@ class _EmployerDashboardState extends State<EmployerDashboard>
       case 1:
         return employer_jobs.JobsPage(profile: _profile);
       case 2:
-        return const CandidatesPage();
+        return CandidatesPage(profile: _profile);
       case 3:
         return const EmployerProfilePage();
       default:

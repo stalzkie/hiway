@@ -3,7 +3,6 @@ import 'package:hiway_app/widgets/common/app_theme.dart';
 import 'package:hiway_app/data/models/job_post_model.dart';
 import 'package:hiway_app/widgets/employer/job_detail_dialog.dart';
 
-/// Job Card Widget - displays individual job post information
 class JobCard extends StatelessWidget {
   final JobPostModel job;
   final VoidCallback? onView;

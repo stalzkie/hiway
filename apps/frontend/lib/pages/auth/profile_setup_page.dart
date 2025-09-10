@@ -43,6 +43,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _businessPermitController = TextEditingController();
 
   bool _isLoading = false;
+  bool _acceptedTerms = false;
   String? _errorMessage;
   String _selectedRole = AppConstants.jobSeekerRole;
 
@@ -166,6 +167,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       appBar: AppBar(
         title: const Text('Complete Your Profile'),
         centerTitle: true,
+        automaticallyImplyLeading: false,
       ),
       body: LoadingOverlay(
         isLoading: _isLoading,
@@ -306,10 +308,94 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
                   const SizedBox(height: 32),
 
+                  // Terms and Conditions Checkbox
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: _acceptedTerms,
+                          onChanged: _isLoading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _acceptedTerms = value ?? false;
+                                  });
+                                },
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _acceptedTerms = !_acceptedTerms;
+                                    });
+                                  },
+                            child: RichText(
+                              text: TextSpan(
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                children: [
+                                  const TextSpan(text: 'I agree to the '),
+                                  TextSpan(
+                                    text: 'Terms and Conditions',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                  const TextSpan(text: ' and '),
+                                  TextSpan(
+                                    text: 'Privacy Policy',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text:
+                                        '. I understand that my information will be used to create my profile and match me with relevant opportunities.',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
                   LoadingButton(
-                    onPressed: _createProfile,
+                    onPressed: (_acceptedTerms && !_isLoading)
+                        ? _createProfile
+                        : null,
                     isLoading: _isLoading,
-                    child: const Text('Create My Profile'),
+                    child: Text(
+                      _acceptedTerms
+                          ? 'Create My Profile'
+                          : 'Please accept Terms & Conditions',
+                      style: TextStyle(
+                        color: _acceptedTerms
+                            ? Colors.white
+                            : Theme.of(context).disabledColor,
+                      ),
+                    ),
                   ),
                 ],
               ),
