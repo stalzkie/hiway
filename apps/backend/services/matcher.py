@@ -41,7 +41,11 @@ LLM_JUDGE_TOP_K  = 15              # how many hybrid+reranked to send to LLM
 LLM_WEIGHT       = 0.55            # blend: final = (1-LLM_WEIGHT)*hybrid + LLM_WEIGHT*llm_overall
 OPENAI_MODEL     = "gpt-4o-mini"
 GEMINI_MODEL     = "gemini-1.5-pro"
-LLM_OVERRIDE_SECTION_SCORES = False
+
+# Per-section blending: mix vector section scores with LLM section scores
+BLEND_SECTION_SCORES = True
+LLM_SECTION_ALPHA    = 0.35   # 0..1 (0 = trust vectors only, 1 = trust LLM only)
+
 # Retrieval sizes
 DEFAULT_TOP_K_PER_SECTION = 30
 
@@ -152,7 +156,6 @@ def _query_section(scope: str, vector: List[float], top_k: int) -> List[Dict[str
 def _calibrate_cosine_to_100(s: float) -> float:
     """Map raw cosine similarity (0..1) to stricter 0..100 via logistic."""
     s = max(0.0, min(1.0, float(s)))
-    # logistic in [0..1]
     p = 1.0 / (1.0 + math.exp(-CAL_K * (s - CAL_M)))
     return float(round(p * 100.0, 2))
 
@@ -194,12 +197,10 @@ def _aggregate_scores(
         if len(section_best) < min_sections:
             continue
 
-        # Calculate total weight sum from all valid scopes upfront
         weight_sum = sum(float(weights.get(s, 0.0)) for s in VALID_SCOPES)
         if weight_sum <= 0:
             continue
 
-        # Sum weighted scores, treating missing sections as 0
         weighted = 0.0
         for scope in VALID_SCOPES:
             w = float(weights.get(scope, 0.0))
@@ -451,8 +452,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "• Synonyms/near-equivalents may count (React ↔ frontend React; Google Cloud ↔ GCP), but generic terms do not.\n"
         "• Recency matters: recent, hands-on evidence outweighs old or superficial exposure.\n"
         "• Penalize stack/domain/seniority mismatches and vague or unsubstantiated claims.\n"
-        "• If the candidate lists ONLY generic soft skills (communication, teamwork, leadership), keep the skills score low.\n"
-        "• Education/licenses: if the job does not require them (flags provided), do not penalize overall; you may keep those section scores low but EXCLUDE them from the overall calculation.\n"
+        "• If the job does not require them (flags provided), do not penalize overall; you may keep those section scores low but EXCLUDE them from the overall calculation.\n"
         "• When evidence is thin or ambiguous, keep scores low and do not guess.\n\n"
         "Explanations: Provide concise, specific reasons tied to concrete evidence. 1–2 sentences per matched skill, low-jargon."
     )
@@ -590,7 +590,6 @@ def rank_posts_for_seeker(
     pids = [r["job_post_id"] for r in ranked]
     posts_map = _fetch_posts_map(pids)
 
-
     # Cross-encoder reranker
     ranked = _apply_reranker(job_seeker_id, ranked, posts_map)
 
@@ -617,35 +616,43 @@ def rank_posts_for_seeker(
             j = judged_by_pid.get(pid)
             if not j:
                 continue
-            # Check for domain mismatch and apply strict penalty
+
+            # -------- overall blending (kept) --------
             try:
                 llm_overall = float(j.get("overall", 0.0))
                 is_domain_mismatch = j.get("domain_mismatch", False)
-                
+
                 # Force very low scores for domain mismatches
                 if is_domain_mismatch:
                     llm_overall = min(5.0, llm_overall)  # Hard cap at 5% for complete mismatches
                     r["confidence"] = min(5.0, r["confidence"])  # Cap hybrid score too
-                
+
                 # Regular blending for non-mismatches
                 blended = (1.0 - LLM_WEIGHT) * float(r["confidence"]) + LLM_WEIGHT * llm_overall
                 r["confidence"] = round(min(blended, 15.0 if is_domain_mismatch else 100.0), 2)
             except Exception:
-                llm_overall = 0.0
-                r["confidence"] = round(min(r["confidence"], 15.0), 2)  # Conservative cap if LLM fails
+                # Conservative cap if LLM fails
+                r["confidence"] = round(min(r["confidence"], 15.0), 2)
 
-                if LLM_OVERRIDE_SECTION_SCORES:
-                    js = j.get("section_scores") or {}
-                    for k in ("skills", "experience", "education", "licenses"):
-                        if k in js:
-                            try:
-                                r["section_scores"][k] = round(float(js[k]), 2)
-                            except Exception:
-                                pass
-                            
-            # Attach LLM analysis for UI if requested later
+            # -------- per-section blending (APPLIED TO section_scores) --------
+            # Use current (vector-based) section scores as base
+            base_sections = dict(r.get("section_scores", {}))
+            js_sections = j.get("section_scores") or {}
+
+            if BLEND_SECTION_SCORES and js_sections:
+                blended_sections: Dict[str, float] = {}
+                for k in ("skills", "experience", "education", "licenses"):
+                    v_vec = float(base_sections.get(k, 0.0))
+                    v_llm = float(js_sections.get(k, v_vec))  # fallback to vector if LLM missing key
+                    blended_sections[k] = round((1.0 - LLM_SECTION_ALPHA) * v_vec + LLM_SECTION_ALPHA * v_llm, 2)
+                # Replace displayed per-section scores with the blended values
+                r["section_scores"] = blended_sections
+            else:
+                # No LLM sections; keep vector-derived sections
+                r["section_scores"] = base_sections
+
+            # -------- attach analysis fields (unchanged) --------
             r.setdefault("analysis", {})
-            # Always set required_skills and skills_match_rate for Pydantic compliance
             required_skills = j.get("required_skills")
             if required_skills is None:
                 required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
@@ -656,7 +663,6 @@ def rank_posts_for_seeker(
                 "overall_summary": j.get("notes") or "",
                 "required_skills": required_skills,
             })
-            # Ensure skills_match_rate exists and is normalized to 0..100 for the API model
             req = required_skills or []
             matched = r["analysis"]["matched_skills"] or []
             try:
@@ -703,8 +709,6 @@ def rank_posts_for_seeker_by_email(
         weights=weights,
     )
     # Ensure required analysis fields for all results (not just LLM-judged)
-    # This logic is duplicated from rank_posts_for_seeker to guarantee safety
-    # posts_map is not available here, so we can't fetch job_skills, fallback to []
     for r in results:
         r.setdefault("analysis", {})
         if "required_skills" not in r["analysis"]:
