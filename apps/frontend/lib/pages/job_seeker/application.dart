@@ -285,7 +285,7 @@ class _ApplicationViewState extends State<ApplicationView> {
             width: size,
             height: size,
             child: CircularProgressIndicator(
-              value: progress,
+              value: progress/100,
               strokeWidth: 8,
               backgroundColor: Colors.grey[200],
               color: AppTheme.successColor
