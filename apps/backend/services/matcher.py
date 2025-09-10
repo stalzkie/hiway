@@ -41,7 +41,7 @@ LLM_JUDGE_TOP_K  = 15              # how many hybrid+reranked to send to LLM
 LLM_WEIGHT       = 0.55            # blend: final = (1-LLM_WEIGHT)*hybrid + LLM_WEIGHT*llm_overall
 OPENAI_MODEL     = "gpt-4o-mini"
 GEMINI_MODEL     = "gemini-1.5-pro"
-
+LLM_OVERRIDE_SECTION_SCORES = False
 # Retrieval sizes
 DEFAULT_TOP_K_PER_SECTION = 30
 
@@ -634,15 +634,15 @@ def rank_posts_for_seeker(
                 llm_overall = 0.0
                 r["confidence"] = round(min(r["confidence"], 15.0), 2)  # Conservative cap if LLM fails
 
-            # Optionally surface LLM section scores into section_scores (soft override)
-            js = j.get("section_scores") or {}
-            for k in ("skills", "experience", "education", "licenses"):
-                if k in js:
-                    try:
-                        r["section_scores"][k] = round(float(js[k]), 2)
-                    except Exception:
-                        pass
-
+                if LLM_OVERRIDE_SECTION_SCORES:
+                    js = j.get("section_scores") or {}
+                    for k in ("skills", "experience", "education", "licenses"):
+                        if k in js:
+                            try:
+                                r["section_scores"][k] = round(float(js[k]), 2)
+                            except Exception:
+                                pass
+                            
             # Attach LLM analysis for UI if requested later
             r.setdefault("analysis", {})
             # Always set required_skills and skills_match_rate for Pydantic compliance
