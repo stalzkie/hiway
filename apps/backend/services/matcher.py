@@ -40,7 +40,7 @@ LLM_ENABLE       = True            # on by default
 LLM_JUDGE_TOP_K  = 15              # how many hybrid+reranked to send to LLM
 LLM_WEIGHT       = 0.55            # blend: final = (1-LLM_WEIGHT)*hybrid + LLM_WEIGHT*llm_overall
 OPENAI_MODEL     = "gpt-4o-mini"
-GEMINI_MODEL     = "gemini-1.5-pro"
+GEMINI_MODEL     = "gemini-2.5-flash"
 
 # Per-section blending: mix vector section scores with LLM section scores
 BLEND_SECTION_SCORES = True

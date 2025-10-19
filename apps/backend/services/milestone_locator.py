@@ -365,7 +365,7 @@ def _call_llm(prompt: str) -> Dict[str, Any]:
     elif provider == "gemini":
         import google.generativeai as genai
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-pro"))
+        model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
         resp = model.generate_content(
             prompt,
             generation_config={
