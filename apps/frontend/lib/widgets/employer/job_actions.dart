@@ -59,7 +59,7 @@ mixin JobActionsMixin<T extends StatefulWidget> on State<T> {
   /// Handle job submission (create)
   Future<void> handleJobSubmission(JobPostFormData formData) async {
     try {
-      final jobPost = await _jobPostService.createJobPost(
+      await _jobPostService.createJobPost(
         jobTitle: formData.jobTitle,
         jobOverview: formData.jobOverview,
         jobLocation: formData.jobLocation,
