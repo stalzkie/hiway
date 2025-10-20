@@ -676,34 +676,6 @@ def rank_posts_for_seeker(
                 smr = (len(matched) / max(1, len(_coerce_to_list(req)))) * 100.0
             r["analysis"]["skills_match_rate"] = round(float(smr), 2)
 
-    # -------------------- FIX ADDED: Post-pass to ALWAYS fill analysis defaults --------------------
-    # Ensures every item (not just LLM-judged) has analysis fields + skills_match_rate
-    for r in ranked:
-        a = r.setdefault("analysis", {})
-        # required_skills fallback from job_post
-        if "required_skills" not in a:
-            post = posts_map.get(r["job_post_id"], {}) or {}
-            a["required_skills"] = _coerce_to_list(post.get("job_skills"))
-        a.setdefault("matched_skills", [])
-        a.setdefault("missing_skills", [])
-        a.setdefault("matched_explanations", {})
-        a.setdefault("overall_summary", "")
-        a.setdefault("domain_mismatch", False)
-
-        req = a["required_skills"] or []
-        matched = a["matched_skills"] or []
-        try:
-            smr = a.get("skills_match_rate")
-            if smr is None:
-                smr = len(matched) / max(1, len(req))
-            smr = float(smr)
-            if smr <= 1.0:
-                smr *= 100.0
-        except Exception:
-            smr = (len(matched) / max(1, len(req))) * 100.0
-        a["skills_match_rate"] = round(float(smr), 2)
-    # -----------------------------------------------------------------------------------------------
-
     # Add details if requested
     if include_job_details:
         for r in ranked:
