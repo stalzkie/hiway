@@ -457,14 +457,19 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "• Penalize stack/domain/seniority mismatches and vague or unsubstantiated claims.\n"
         "• If the job does not require them (flags provided), do not penalize overall; you may keep those section scores low but EXCLUDE them from the overall calculation.\n"
         "• When evidence is thin or ambiguous, keep scores low and do not guess.\n\n"
-        "Explanations: Provide concise, specific reasons tied to concrete evidence. 1–2 sentences per matched skill, low-jargon."
+        "Explanations: Provide concise, specific reasons tied to concrete evidence. 1–2 sentences per matched skill, low-jargon.\n\n"
+        "Overall Summary style (IMPORTANT): Produce an 'overall_summary' that reads like a job interviewer’s debrief:\n"
+        "• 3–6 sentences, plain language, professional and candid.\n"
+        "• Start with a one-line verdict (Strong fit / Moderate fit / Weak fit) and why.\n"
+        "• Call out 2–3 concrete strengths tied to the posting.\n"
+        "• Call out 1–2 notable gaps or risks (years, tools, domain, seniority).\n"
+        "• End with a clear next step (e.g., proceed to phone screen / hold for upskilling / reject with rationale).\n"
     )
-
     schema_hint = {
         "type": "array",
         "items": {
             "type": "object",
-            "required": ["job_post_id", "section_scores", "overall", "matched_skills", "missing_skills", "domain_mismatch"],
+            "required": ["job_post_id", "section_scores", "overall", "matched_skills", "missing_skills", "domain_mismatch", "overall_summary"],
             "properties": {
                 "job_post_id": {"type": "string"},
                 "section_scores": {
@@ -481,7 +486,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
                 "missing_skills": {"type": "array", "items": {"type": "string"}},
                 "matched_explanations": {"type": "object", "additionalProperties": {"type": "string"}},
                 "domain_mismatch": {"type": "boolean", "description": "True if candidate's domain is completely unrelated to the job"},
-                "notes": {"type": "string"},
+                "overall_summary": {"type": "string"}
             }
         }
     }
@@ -491,10 +496,10 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
         "jobs": jobs_ctx,
         "instructions": {
             "explanation_style": "1–2 sentences per matched skill; simple, specific, low-jargon",
-            "overall_weighting": "Compute overall as ~40% skills, 30% experience, 15% education/licenses; "
-                                 "IF education_required=false or license_required=false for a job, exclude that section from the overall weighting.",
+            "overall_weighting": "Compute overall as ~40% skills, 30% experience, 15% education/licenses; IF education_required=false or license_required=false for a job, exclude that section from the overall weighting.",
             "strictness": "Be EXTREMELY conservative. Unrelated domains must not exceed 5%. Similar but different domains must not exceed 15%.",
             "domain_rules": "Set domain_mismatch=true if backgrounds are completely unrelated (e.g., construction worker applying to software dev).",
+            "overall_summary_voice": "Write overall_summary like a job interviewer’s debrief: concise, professional, evidence-based, with a final recommendation."
         },
         "response_schema_hint": schema_hint,
     }
@@ -829,7 +834,7 @@ def rank_posts_for_seeker(
                 "matched_skills": (j or {}).get("matched_skills") or [],
                 "missing_skills": (j or {}).get("missing_skills") or [],
                 "matched_explanations": (j or {}).get("matched_explanations") or {},
-                "overall_summary": (j or {}).get("notes") or "",
+                "overall_summary": (j or {}).get("overall_summary") or "",
                 "required_skills": required_skills_full,
             })
             req = required_skills_full or []
