@@ -38,22 +38,21 @@ RERANK_TOP_K  = 50       # rerank up to this many from the hybrid list
 # LLM judge (strict, context-aware) to refine top results
 LLM_ENABLE       = True            # on by default
 LLM_JUDGE_TOP_K  = 15              # how many hybrid+reranked to send to LLM
-# NOTE: We no longer blend an independent LLM overall into the final number.
-# We blend at the *section* level, and the overall is computed from those sections.
 OPENAI_MODEL     = "gpt-4o-mini"
 GEMINI_MODEL     = "gemini-2.5-flash"
 
 # Per-section blending: mix vector section scores with LLM section scores
 BLEND_SECTION_SCORES = True
-LLM_SECTION_ALPHA    = 0.35   # base alpha; will be adapted per-section (Suggestion #3)
+# Base alpha; we’ll adapt it per-section (agreement-aware)
+LLM_SECTION_ALPHA    = 0.50
 
 # Retrieval sizes
 DEFAULT_TOP_K_PER_SECTION = 30
 
-# Stricter calibration of raw cosine -> 0..100 (smooth, not hard caps)
-# Example: s=0.45 → ~8.3%, s=0.65 → ~50%, s=0.85 → ~95%
-CAL_K = 12.0
-CAL_M = 0.65
+# ---------------- STRONGER CALIBRATION (HARSHER) -------------------
+# Push mid cosines down: steeper S-curve + right shift
+CAL_K = 16.0
+CAL_M = 0.72
 
 # =========================== ENV CHECKS =============================
 
@@ -543,7 +542,7 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
 
     raise RuntimeError("LLM returned unexpected JSON shape")
 
-# -------------- LLM calibration (Suggestion #2) --------------------
+# -------------- LLM calibration (normalize to 0..100) --------------
 
 def _calibrate_llm_batch(judged: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
@@ -592,7 +591,7 @@ def _calibrate_llm_batch(judged: List[Dict[str, Any]]) -> Dict[str, Dict[str, An
         }
     return out
 
-# -------------- Adaptive per-section alpha (Suggestion #3) --------
+# -------------- Adaptive per-section alpha -------------------------
 
 def _adaptive_alpha(vec: float, llm: float, base_alpha: float = LLM_SECTION_ALPHA) -> float:
     """
@@ -604,7 +603,7 @@ def _adaptive_alpha(vec: float, llm: float, base_alpha: float = LLM_SECTION_ALPH
     adj = max(-0.20, min(0.15, 0.15 - 0.35 * (delta / 40.0)))
     return max(0.05, min(0.65, base_alpha + adj))
 
-# -------------- Finalize sections and overall (Suggestion #1) -----
+# -------------- Finalize sections and overall ----------------------
 
 def _finalize_scores(
     vec_sections: Dict[str, float],
@@ -634,6 +633,61 @@ def _finalize_scores(
     overall = sum(eff_w[k] * blended.get(k, 0.0) for k in eff_w) / denom
     return ({k: round(blended[k], 2) for k in blended}, round(_clamp(overall), 2))
 
+# -------------------- HARSH MODE PENALTIES -------------------------
+# If experience is very low or required skills coverage is tiny, clamp/scale overall.
+# We then uniformly scale section scores so overall == weighted mean of the new sections.
+
+EXP_HARD_CAP_1 = 15.0   # cap when experience section < 15
+EXP_HARD_CAP_2 = 28.0   # cap when experience section < 28
+EXP_SCALE_2    = 0.60   # scale when experience section in [15..28)
+
+COVERAGE_HARD_CAP = 8.0   # cap when required-skill coverage < 10%
+COVERAGE_SCALE_1  = 0.45  # scale when coverage in [10%..30%)
+COVERAGE_SCALE_2  = 0.70  # scale when coverage in [30%..50%)
+
+def _compute_penalized_overall(
+    overall: float,
+    blended_sections: Dict[str, float],
+    required_skills: List[str],
+    matched_skills: List[str],
+) -> float:
+    """Compute a harsher overall (no section changes here)."""
+    exp = float(blended_sections.get("experience", 0.0))
+    out = float(overall)
+
+    # Experience penalty
+    if exp < EXP_HARD_CAP_1:
+        out = min(out, EXP_HARD_CAP_1)
+    elif exp < EXP_HARD_CAP_2:
+        out = out * EXP_SCALE_2
+
+    # Required skills coverage penalty
+    req = [s.strip().lower() for s in (required_skills or []) if s and s.strip()]
+    mat = [s.strip().lower() for s in (matched_skills or []) if s and s.strip()]
+    cov = 0.0
+    if req:
+        cov = len(set(mat) & set(req)) / max(1, len(req))
+
+    if cov < 0.10:
+        out = min(out, COVERAGE_HARD_CAP)
+    elif cov < 0.30:
+        out = out * COVERAGE_SCALE_1
+    elif cov < 0.50:
+        out = out * COVERAGE_SCALE_2
+
+    return round(_clamp(out), 2)
+
+def _rescale_sections_uniform(
+    sections: Dict[str, float],
+    old_overall: float,
+    new_overall: float,
+) -> Dict[str, float]:
+    """Uniformly scale all section scores so the new overall matches the breakdown."""
+    if old_overall <= 0.0 or new_overall == old_overall:
+        return sections
+    f = max(0.0, new_overall / max(1e-6, old_overall))
+    return {k: _clamp(round(float(v) * f, 2)) for k, v in sections.items()}
+
 # ======================== CORE RANKING API ========================
 
 def _collect_candidates(seeker_vecs: Dict[str, List[float]], top_k_per_section: int) -> Dict[str, Dict[str, Any]]:
@@ -661,7 +715,7 @@ def rank_posts_for_seeker(
       1) Per-section Pinecone queries
       2) Strict calibrated weighted aggregation
       3) Optional cross-encoder reranker (blends with aggregation)
-      4) LLM judge on top-K: *section-level* fusion, then overall strictly from sections
+      4) LLM judge on top-K: *section-level* fusion, overall from sections, HARSH penalties applied with uniform rescale
     """
     # Ensure seeker vectors exist; else enqueue best-effort and return []
     seeker_vecs = get_seeker_vectors(job_seeker_id)
@@ -693,7 +747,7 @@ def rank_posts_for_seeker(
     valid_post_ids = set(posts_map.keys())
     ranked = [r for r in ranked if r["job_post_id"] in valid_post_ids]
 
-    # 4) LLM judge on the top subset, then SECTION-LEVEL fusion; overall from sections
+    # 4) LLM judge on the top subset, then SECTION-LEVEL fusion; overall from sections; harsh penalties + uniform rescale
     if LLM_ENABLE and ranked:
         top = ranked[: min(LLM_JUDGE_TOP_K, len(ranked))]
         jobs_ctx = [_build_job_context(posts_map.get(r["job_post_id"], {})) for r in top]
@@ -701,7 +755,7 @@ def rank_posts_for_seeker(
 
         try:
             judged_raw = _llm_score_candidates(seeker_ctx, jobs_ctx)
-            judged_by_pid = _calibrate_llm_batch(judged_raw)  # Suggestion #2
+            judged_by_pid = _calibrate_llm_batch(judged_raw)
         except Exception as e:
             judged_by_pid = {}
             print(f"[WARN] LLM judge failed: {e}")
@@ -720,9 +774,8 @@ def rank_posts_for_seeker(
             if j and BLEND_SECTION_SCORES:
                 llm_sections = j.get("section_scores") or {}
 
-                # Domain mismatch handling (keep consistent with overall):
+                # Domain mismatch handling (push sections low; mask edu/lic unless required)
                 if j.get("domain_mismatch", False):
-                    # Make skills/experience very low; mask edu/lic unless explicitly required.
                     llm_sections = dict(llm_sections)
                     llm_sections["skills"] = min(llm_sections.get("skills", 0.0), 5.0)
                     llm_sections["experience"] = min(llm_sections.get("experience", 0.0), 5.0)
@@ -737,8 +790,18 @@ def rank_posts_for_seeker(
                     weights=weights_eff,
                     required=req_flags,
                 )
+                # Compute harsh penalized overall then uniformly rescale sections to keep equality
+                required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
+                matched_from_llm = (j or {}).get("matched_skills") or []
+                harsh_overall = _compute_penalized_overall(
+                    overall=overall,
+                    blended_sections=blended_sections,
+                    required_skills=required_skills,
+                    matched_skills=matched_from_llm,
+                )
+                blended_sections = _rescale_sections_uniform(blended_sections, overall, harsh_overall)
                 r["section_scores"] = blended_sections
-                r["confidence"] = overall  # <-- overall strictly equals weighted mean of sections
+                r["confidence"] = harsh_overall
             else:
                 # No LLM sections; ensure confidence equals weighted mean of current sections.
                 blended_sections, overall = _finalize_scores(
@@ -747,20 +810,29 @@ def rank_posts_for_seeker(
                     weights=weights_eff,
                     required=req_flags,
                 )
+                # Even without LLM, apply harsh penalties based on vector-derived sections
+                required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
+                harsh_overall = _compute_penalized_overall(
+                    overall=overall,
+                    blended_sections=blended_sections,
+                    required_skills=required_skills,
+                    matched_skills=[],  # no LLM matches; assume none
+                )
+                blended_sections = _rescale_sections_uniform(blended_sections, overall, harsh_overall)
                 r["section_scores"] = blended_sections
-                r["confidence"] = overall
+                r["confidence"] = harsh_overall
 
             # -------- attach analysis fields (kept) --------
             r.setdefault("analysis", {})
-            required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
+            required_skills_full = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
             r["analysis"].update({
                 "matched_skills": (j or {}).get("matched_skills") or [],
                 "missing_skills": (j or {}).get("missing_skills") or [],
                 "matched_explanations": (j or {}).get("matched_explanations") or {},
                 "overall_summary": (j or {}).get("notes") or "",
-                "required_skills": required_skills,
+                "required_skills": required_skills_full,
             })
-            req = required_skills or []
+            req = required_skills_full or []
             matched = r["analysis"]["matched_skills"] or []
             try:
                 smr = len(matched) / max(1, len(_coerce_to_list(req)))
@@ -801,7 +873,7 @@ def rank_posts_for_seeker_by_email(
         min_sections=min_sections,
         weights=weights,
     )
-    # Ensure required analysis fields for all results (not just LLM-judged)
+    # Ensure required analysis fields for all results
     for r in results:
         r.setdefault("analysis", {})
         if "required_skills" not in r["analysis"]:
@@ -837,7 +909,7 @@ def match_and_enrich(
     Final service for the endpoint:
       - Retrieve & aggregate
       - Rerank (cross-encoder)
-      - LLM judge blend (section-level)
+      - LLM judge blend (section-level) + harsh penalties (uniform rescale)
       - Persist to Supabase (best-effort)
     """
     results = rank_posts_for_seeker(

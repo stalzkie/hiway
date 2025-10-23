@@ -274,6 +274,8 @@ class JobCard extends StatelessWidget {
     return Row(
       children: [
         _buildSalaryPill(),
+        const SizedBox(width: 8),
+        _buildVerifiedPill(), // <-- NEW
         const Spacer(),
         if (job.isTrending) _buildTrendingBadge(),
       ],
@@ -309,6 +311,34 @@ class JobCard extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Icon(icon, size: 16, color: salaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// NEW: Verified pill with same UI style as salary pill
+  Widget _buildVerifiedPill() {
+    final c = AppTheme.successColor;
+    return Tooltip(
+      message: 'Verified job post',
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.withValues(alpha: 0.2), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.verified_rounded, size: 16, color: c),
+            const SizedBox(width: 6),
+            const Text(
+              'Verified',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.successColor),
+            ),
           ],
         ),
       ),

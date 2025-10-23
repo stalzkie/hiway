@@ -127,7 +127,6 @@ def _run_worker_passes(eager_passes: int = 2) -> None:
         return
     try:
         for _ in range(max(1, eager_passes)):
-            # Each call consumes up to EMBED_BATCH from env; quick and safe.
             try:
                 cs = process_job_seeker_batch()  # type: ignore
             except Exception as e:
@@ -138,7 +137,6 @@ def _run_worker_passes(eager_passes: int = 2) -> None:
             except Exception as e:
                 cp = 0
                 print(f"[WARN] process_job_post_batch failed: {e}")
-            # If nothing processed, no need to loop more
             if cs == 0 and cp == 0:
                 break
     except Exception as e:
@@ -179,7 +177,7 @@ class SkillAnalysis(BaseModel):
 
 class MatchItem(BaseModel):
     job_post_id: str = Field(..., description="UUID of the job post")
-    confidence: float = Field(..., ge=0, le=100, description="Final LLM-blended score (0..100)")
+    confidence: float = Field(..., ge=0, le=100, description="Final strict score (0..100)")
     section_scores: SectionScores = Field(..., description="Per-section scores (0..100)")
     job_post: Optional[dict] = Field(
         None, description="Job post row (included when include_details=true)"
@@ -200,9 +198,8 @@ class MatchResponse(BaseModel):
     summary="Match Seeker To Jobs",
     description=(
         "Retrieves candidate job posts from Pinecone (per-section vectors) and scores them "
-        "with an LLM using retrieved context (RAG). The LLM produces stricter per-section "
-        "scores (skills / experience / education / licenses) and a final confidence (0..100). "
-        "Provide either job_seeker_id or email (email will be resolved). Results may be persisted."
+        "with an LLM using retrieved context (RAG). The final score is a strict, section-driven "
+        "weighted mean with harsh penalties for experience and required-skill gaps."
     ),
 )
 def match_seeker_to_jobs(
@@ -221,13 +218,16 @@ def match_seeker_to_jobs(
         False, description="If true, attach job_post rows to each match", example=False
     ),
     min_sections: int = Query(
-        1, ge=1, le=4, description="Require at least N sections to contribute to a post’s score", example=2
+        2,  # stricter default; was 1
+        ge=1, le=4,
+        description="Require at least N sections to contribute to a post’s score",
+        example=2
     ),
     include_explanations: bool = Query(
         True,
-        description="LLM explanations and overall summary are now ALWAYS used for scoring; keep true.",
+        description="LLM explanations and overall summary are always used when available.",
         example=True,
-        deprecated=True,  # kept for backwards compatibility, scorer now always uses LLM
+        deprecated=True,
     ),
     eager_embed: bool = Query(
         True,
@@ -240,7 +240,7 @@ def match_seeker_to_jobs(
       1) Resolve job_seeker_id (or from email).
       2) Enqueue seeker + any stale posts (with a valid NOT-NULL 'reason').
       3) (Optional) Run 1–2 quick worker passes and briefly poll for the seeker's embeddings.
-      4) Run LLM-first matcher (RAG) + persist results.
+      4) Run strict matcher (vectors + LLM sections), then apply harsh penalties with uniform rescale.
     """
     # 1) Resolve seeker id
     if email and not job_seeker_id:
@@ -263,7 +263,7 @@ def match_seeker_to_jobs(
         except Exception as e:
             print(f"[WARN] eager embed pipeline failed (non-fatal): {e}")
 
-    # 4) Run matcher (LLM-first + RAG)
+    # 4) Run matcher
     try:
         results: List[Dict[str, Any]] = rank_posts_for_seeker(
             job_seeker_id=job_seeker_id,
@@ -274,14 +274,14 @@ def match_seeker_to_jobs(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Persist results to Supabase (optional; rank_posts_for_seeker already persists)
+    # Persist results to Supabase (optional; matcher also persists)
     try:
         persist_matcher_results(
             auth_user_id=None,
             job_seeker_id=job_seeker_id,
             matcher_results=results,
             default_weights=None,
-            method=f"rag-llm (reason={reason})",
+            method=f"rag-llm strict (reason={reason})",
             model_version="api-endpoint",
         )
     except Exception as e:
