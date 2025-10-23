@@ -38,13 +38,14 @@ RERANK_TOP_K  = 50       # rerank up to this many from the hybrid list
 # LLM judge (strict, context-aware) to refine top results
 LLM_ENABLE       = True            # on by default
 LLM_JUDGE_TOP_K  = 15              # how many hybrid+reranked to send to LLM
-LLM_WEIGHT       = 0.55            # blend: final = (1-LLM_WEIGHT)*hybrid + LLM_WEIGHT*llm_overall
+# NOTE: We no longer blend an independent LLM overall into the final number.
+# We blend at the *section* level, and the overall is computed from those sections.
 OPENAI_MODEL     = "gpt-4o-mini"
 GEMINI_MODEL     = "gemini-2.5-flash"
 
 # Per-section blending: mix vector section scores with LLM section scores
 BLEND_SECTION_SCORES = True
-LLM_SECTION_ALPHA    = 0.35   # 0..1 (0 = trust vectors only, 1 = trust LLM only)
+LLM_SECTION_ALPHA    = 0.35   # base alpha; will be adapted per-section (Suggestion #3)
 
 # Retrieval sizes
 DEFAULT_TOP_K_PER_SECTION = 30
@@ -152,6 +153,9 @@ def _query_section(scope: str, vector: List[float], top_k: int) -> List[Dict[str
     return res.get("matches", []) if isinstance(res, dict) else (getattr(res, "matches", None) or [])
 
 # ==================== CALIBRATION & AGGREGATION ====================
+
+def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
+    return float(min(hi, max(lo, v)))
 
 def _calibrate_cosine_to_100(s: float) -> float:
     """Map raw cosine similarity (0..1) to stricter 0..100 via logistic."""
@@ -539,6 +543,97 @@ def _llm_score_candidates(seeker_ctx: Dict[str, Any], jobs_ctx: List[Dict[str, A
 
     raise RuntimeError("LLM returned unexpected JSON shape")
 
+# -------------- LLM calibration (Suggestion #2) --------------------
+
+def _calibrate_llm_batch(judged: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """
+    Min-max normalize LLM section scores and overall across the judged cohort.
+    Returns pid -> {overall, section_scores{...}, domain_mismatch, matched_skills, ...}
+    """
+    if not judged:
+        return {}
+
+    pids = []
+    ovals, s_skills, s_exp, s_edu, s_lic = [], [], [], [], []
+    for j in judged:
+        pid = str(j.get("job_post_id"))
+        if not pid:
+            continue
+        pids.append(pid)
+        ss = j.get("section_scores") or {}
+        ovals.append(float(j.get("overall", 0.0)))
+        s_skills.append(float(ss.get("skills", 0.0)))
+        s_exp.append(float(ss.get("experience", 0.0)))
+        s_edu.append(float(ss.get("education", 0.0)))
+        s_lic.append(float(ss.get("licenses", 0.0)))
+
+    ovals_n = _minmax_to_0_100(ovals)
+    s_skills_n = _minmax_to_0_100(s_skills)
+    s_exp_n    = _minmax_to_0_100(s_exp)
+    s_edu_n    = _minmax_to_0_100(s_edu)
+    s_lic_n    = _minmax_to_0_100(s_lic)
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for i, pid in enumerate(pids):
+        j = judged[i]
+        out[pid] = {
+            "overall": _clamp(ovals_n[i]),
+            "section_scores": {
+                "skills":     _clamp(s_skills_n[i]),
+                "experience": _clamp(s_exp_n[i]),
+                "education":  _clamp(s_edu_n[i]),
+                "licenses":   _clamp(s_lic_n[i]),
+            },
+            "domain_mismatch": bool(j.get("domain_mismatch", False)),
+            "matched_skills": j.get("matched_skills") or [],
+            "missing_skills": j.get("missing_skills") or [],
+            "matched_explanations": j.get("matched_explanations") or {},
+            "notes": j.get("notes") or "",
+        }
+    return out
+
+# -------------- Adaptive per-section alpha (Suggestion #3) --------
+
+def _adaptive_alpha(vec: float, llm: float, base_alpha: float = LLM_SECTION_ALPHA) -> float:
+    """
+    If vec and llm agree (small delta), increase alpha slightly; if they disagree, reduce it.
+    Keeps alpha within [0.05, 0.65].
+    """
+    delta = abs(float(vec) - float(llm))  # 0..100
+    # Map: delta 0 -> +0.15; delta 40+ -> -0.20 (clamped)
+    adj = max(-0.20, min(0.15, 0.15 - 0.35 * (delta / 40.0)))
+    return max(0.05, min(0.65, base_alpha + adj))
+
+# -------------- Finalize sections and overall (Suggestion #1) -----
+
+def _finalize_scores(
+    vec_sections: Dict[str, float],
+    llm_sections: Dict[str, float] | None,
+    weights: Dict[str, float],
+    required: Dict[str, bool],
+) -> tuple[Dict[str, float], float]:
+    """
+    1) Blend sections with adaptive alpha.
+    2) Mask non-required sections (education/licenses) by zeroing their weights when not required.
+    3) Compute overall strictly as the weighted mean of the blended sections.
+    """
+    blended: Dict[str, float] = {}
+    for k in ("skills", "experience", "education", "licenses"):
+        v_vec = float(vec_sections.get(k, 0.0))
+        v_llm = float((llm_sections or {}).get(k, v_vec))
+        a = _adaptive_alpha(v_vec, v_llm, LLM_SECTION_ALPHA)
+        blended[k] = _clamp((1.0 - a) * v_vec + a * v_llm)
+
+    # Effective weights: do not penalize non-required sections
+    eff_w: Dict[str, float] = {}
+    for k in ("skills", "experience", "education", "licenses"):
+        need = True if k in ("skills", "experience") else bool(required.get(k, False))
+        eff_w[k] = float(weights.get(k, 0.0)) if need else 0.0
+    denom = sum(eff_w.values()) or 1.0
+
+    overall = sum(eff_w[k] * blended.get(k, 0.0) for k in eff_w) / denom
+    return ({k: round(blended[k], 2) for k in blended}, round(_clamp(overall), 2))
+
 # ======================== CORE RANKING API ========================
 
 def _collect_candidates(seeker_vecs: Dict[str, List[float]], top_k_per_section: int) -> Dict[str, Dict[str, Any]]:
@@ -566,7 +661,7 @@ def rank_posts_for_seeker(
       1) Per-section Pinecone queries
       2) Strict calibrated weighted aggregation
       3) Optional cross-encoder reranker (blends with aggregation)
-      4) Optional LLM judge on top-K (blends with hybrid for final confidence)
+      4) LLM judge on top-K: *section-level* fusion, then overall strictly from sections
     """
     # Ensure seeker vectors exist; else enqueue best-effort and return []
     seeker_vecs = get_seeker_vectors(job_seeker_id)
@@ -576,6 +671,7 @@ def rank_posts_for_seeker(
             sb.table("embedding_queue").insert({"job_seeker_id": job_seeker_id, "reason": "insert"}).execute()
         except Exception:
             pass
+
     # 1–2) Aggregate with stricter calibration
     weights_eff = _effective_weights(weights)
     section_results: Dict[str, List[Dict[str, Any]]] = {}
@@ -590,88 +686,85 @@ def rank_posts_for_seeker(
     pids = [r["job_post_id"] for r in ranked]
     posts_map = _fetch_posts_map(pids)
 
-    # Cross-encoder reranker
+    # Cross-encoder reranker (preliminary ordering/boost)
     ranked = _apply_reranker(job_seeker_id, ranked, posts_map)
 
     # Filter out job posts that do not exist in the job_post table
     valid_post_ids = set(posts_map.keys())
     ranked = [r for r in ranked if r["job_post_id"] in valid_post_ids]
 
-    # 4) LLM judge on the top subset, then blend with hybrid
+    # 4) LLM judge on the top subset, then SECTION-LEVEL fusion; overall from sections
     if LLM_ENABLE and ranked:
         top = ranked[: min(LLM_JUDGE_TOP_K, len(ranked))]
         jobs_ctx = [_build_job_context(posts_map.get(r["job_post_id"], {})) for r in top]
         seeker_ctx = _fetch_seeker_context(job_seeker_id)
 
         try:
-            judged = _llm_score_candidates(seeker_ctx, jobs_ctx)
-            judged_by_pid = {str(it.get("job_post_id")): it for it in judged if it.get("job_post_id")}
+            judged_raw = _llm_score_candidates(seeker_ctx, jobs_ctx)
+            judged_by_pid = _calibrate_llm_batch(judged_raw)  # Suggestion #2
         except Exception as e:
             judged_by_pid = {}
-            # non-fatal; keep hybrid if LLM fails
             print(f"[WARN] LLM judge failed: {e}")
 
         for r in top:
             pid = r["job_post_id"]
             j = judged_by_pid.get(pid)
-            if not j:
-                continue
-
-            # -------- overall blending (kept) --------
-            try:
-                llm_overall = float(j.get("overall", 0.0))
-                is_domain_mismatch = j.get("domain_mismatch", False)
-
-                # Force very low scores for domain mismatches
-                if is_domain_mismatch:
-                    llm_overall = min(5.0, llm_overall)  # Hard cap at 5% for complete mismatches
-                    r["confidence"] = min(5.0, r["confidence"])  # Cap hybrid score too
-
-                # Regular blending for non-mismatches
-                blended = (1.0 - LLM_WEIGHT) * float(r["confidence"]) + LLM_WEIGHT * llm_overall
-                r["confidence"] = round(min(blended, 15.0 if is_domain_mismatch else 100.0), 2)
-            except Exception:
-                # Conservative cap if LLM fails
-                r["confidence"] = round(min(r["confidence"], 15.0), 2)
-
-            # -------- per-section blending (APPLIED TO section_scores) --------
-            # Use current (vector-based) section scores as base
             base_sections = dict(r.get("section_scores", {}))
-            js_sections = j.get("section_scores") or {}
 
-            if BLEND_SECTION_SCORES and js_sections:
-                blended_sections: Dict[str, float] = {}
-                for k in ("skills", "experience", "education", "licenses"):
-                    v_vec = float(base_sections.get(k, 0.0))
-                    v_llm = float(js_sections.get(k, v_vec))  # fallback to vector if LLM missing key
-                    blended_sections[k] = round((1.0 - LLM_SECTION_ALPHA) * v_vec + LLM_SECTION_ALPHA * v_llm, 2)
-                # Replace displayed per-section scores with the blended values
+            # Required flags for masking
+            req_flags = {
+                "education": bool(posts_map.get(pid, {}).get("job_education")),
+                "licenses":  bool(posts_map.get(pid, {}).get("job_licenses_certifications")),
+            }
+
+            if j and BLEND_SECTION_SCORES:
+                llm_sections = j.get("section_scores") or {}
+
+                # Domain mismatch handling (keep consistent with overall):
+                if j.get("domain_mismatch", False):
+                    # Make skills/experience very low; mask edu/lic unless explicitly required.
+                    llm_sections = dict(llm_sections)
+                    llm_sections["skills"] = min(llm_sections.get("skills", 0.0), 5.0)
+                    llm_sections["experience"] = min(llm_sections.get("experience", 0.0), 5.0)
+                    if not req_flags["education"]:
+                        llm_sections["education"] = 0.0
+                    if not req_flags["licenses"]:
+                        llm_sections["licenses"] = 0.0
+
+                blended_sections, overall = _finalize_scores(
+                    vec_sections=base_sections,
+                    llm_sections=llm_sections,
+                    weights=weights_eff,
+                    required=req_flags,
+                )
                 r["section_scores"] = blended_sections
+                r["confidence"] = overall  # <-- overall strictly equals weighted mean of sections
             else:
-                # No LLM sections; keep vector-derived sections
-                r["section_scores"] = base_sections
+                # No LLM sections; ensure confidence equals weighted mean of current sections.
+                blended_sections, overall = _finalize_scores(
+                    vec_sections=base_sections,
+                    llm_sections=None,
+                    weights=weights_eff,
+                    required=req_flags,
+                )
+                r["section_scores"] = blended_sections
+                r["confidence"] = overall
 
-            # -------- attach analysis fields (unchanged) --------
+            # -------- attach analysis fields (kept) --------
             r.setdefault("analysis", {})
-            required_skills = j.get("required_skills")
-            if required_skills is None:
-                required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
+            required_skills = _coerce_to_list(posts_map.get(pid, {}).get("job_skills"))
             r["analysis"].update({
-                "matched_skills": j.get("matched_skills") or [],
-                "missing_skills": j.get("missing_skills") or [],
-                "matched_explanations": j.get("matched_explanations") or {},
-                "overall_summary": j.get("notes") or "",
+                "matched_skills": (j or {}).get("matched_skills") or [],
+                "missing_skills": (j or {}).get("missing_skills") or [],
+                "matched_explanations": (j or {}).get("matched_explanations") or {},
+                "overall_summary": (j or {}).get("notes") or "",
                 "required_skills": required_skills,
             })
             req = required_skills or []
             matched = r["analysis"]["matched_skills"] or []
             try:
-                smr = j.get("skills_match_rate")
-                if smr is None:
-                    smr = len(matched) / max(1, len(_coerce_to_list(req)))
-                smr = float(smr)
-                if smr <= 1.0:
-                    smr *= 100.0
+                smr = len(matched) / max(1, len(_coerce_to_list(req)))
+                smr = float(smr) * 100.0 if smr <= 1.0 else float(smr)
             except Exception:
                 smr = (len(matched) / max(1, len(_coerce_to_list(req)))) * 100.0
             r["analysis"]["skills_match_rate"] = round(float(smr), 2)
@@ -744,7 +837,7 @@ def match_and_enrich(
     Final service for the endpoint:
       - Retrieve & aggregate
       - Rerank (cross-encoder)
-      - LLM judge blend (strict, context-aware)
+      - LLM judge blend (section-level)
       - Persist to Supabase (best-effort)
     """
     results = rank_posts_for_seeker(
