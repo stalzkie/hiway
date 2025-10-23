@@ -16,31 +16,42 @@ class _ApplicationViewState extends State<ApplicationView> {
   String appBarTitle = 'Loading...';
   bool isDataLoaded = false;
 
+  String _formatOverview(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is String) return raw;
+    if (raw is List) return raw.join('\n');
+    try {
+      return jsonEncode(raw);
+    } catch (_) {
+      return raw.toString();
+    }
+  }
+
+  String formatDate(DateTime date) {
+    final months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final applicationService = ApplicationService(
-        apiBase: 'https://hiway-production-ec0e.up.railway.app');
-    AuthService _auth = AuthService();
-    Map<String, dynamic>? listing_data;
+    final applicationService =
+        ApplicationService(apiBase: 'https://hiway-production-ec0e.up.railway.app');
+    AuthService auth = AuthService();
+    Map<String, dynamic>? listingData;
     String newTitle = "";
-
-    String _formatDate(DateTime date) {
-      final months = [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December'
-      ];
-      return '${months[date.month - 1]} ${date.day}, ${date.year}';
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -52,14 +63,16 @@ class _ApplicationViewState extends State<ApplicationView> {
         title: Text(
           appBarTitle,
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: applicationService.fetchJobWithMatchAndEmployer(
           jobPostId: widget.jobID,
-          authId: _auth.currentUser?.id ?? '',
+          authId: auth.currentUser?.id ?? '',
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -73,17 +86,15 @@ class _ApplicationViewState extends State<ApplicationView> {
             return const Center(child: Text('No data found.'));
           }
 
-          listing_data = data;
+          listingData = data;
 
-          // DEBUG: Print the API response
+          // Debugging info
           print('=== FULL API RESPONSE ===');
-          print(jsonEncode(listing_data));
+          print(jsonEncode(listingData));
           print('=========================');
-          print('matched_skills: ${listing_data!['matched_skills']}');
-          print('missing_skills: ${listing_data!['missing_skills']}');
-          print('Keys available: ${listing_data!.keys.toList()}');
+          print('Keys: ${listingData!.keys.toList()}');
 
-          // Update title only if it's different
+          // Set the AppBar title dynamically
           newTitle = data['job_post']['job_title'] ?? 'Job Details';
           if (appBarTitle != newTitle) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -94,12 +105,17 @@ class _ApplicationViewState extends State<ApplicationView> {
             });
           }
 
+          final jobOverview =
+              _formatOverview(listingData!['job_post']?['job_overview']);
+          final overallSummary =
+              (listingData?['analysis']?['overall_summary'] as String?)?.trim();
+
           return SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // First Card - Job Header
+                  // -------- Header Card --------
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -110,8 +126,7 @@ class _ApplicationViewState extends State<ApplicationView> {
                             children: [
                               const SizedBox(width: 16),
                               Text(
-                                listing_data!['job_post']['employer']
-                                        ['company'] ??
+                                listingData!['job_post']['employer']['company'] ??
                                     'Company Name',
                                 style: const TextStyle(
                                   fontSize: 18,
@@ -121,7 +136,7 @@ class _ApplicationViewState extends State<ApplicationView> {
                             ],
                           ),
                           Text(
-                            'Enlisted on: ${_formatDate(DateTime.parse(listing_data!["job_post"]["created_at"]))}',
+                            'Enlisted on: ${formatDate(DateTime.parse(listingData!["job_post"]["created_at"]))}',
                           ),
                         ],
                       ),
@@ -129,7 +144,7 @@ class _ApplicationViewState extends State<ApplicationView> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Second Card - Job Description
+                  // -------- Job Description --------
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -145,8 +160,10 @@ class _ApplicationViewState extends State<ApplicationView> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            listing_data!['job_post']['job_overview'] ??
-                                'Job Title',
+                            jobOverview.isNotEmpty
+                                ? jobOverview
+                                : 'No description available.',
+                            style: const TextStyle(fontSize: 15),
                           ),
                         ],
                       ),
@@ -154,7 +171,7 @@ class _ApplicationViewState extends State<ApplicationView> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Third Card - Match Indicators
+                  // -------- Match Indicators --------
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 30, 16, 20),
@@ -165,30 +182,34 @@ class _ApplicationViewState extends State<ApplicationView> {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               _buildCircularProgress(
-                                  'Skills',
-                                  listing_data!["section_scores"]["skills"]
-                                          ?.toDouble() ??
-                                      0.0),
+                                'Skills',
+                                listingData!["section_scores"]["skills"]
+                                        ?.toDouble() ??
+                                    0.0,
+                              ),
                               _buildCircularProgress(
-                                  'Licenses',
-                                  listing_data!["section_scores"]["licenses"]
-                                          ?.toDouble() ??
-                                      0.0),
+                                'Licenses',
+                                listingData!["section_scores"]["licenses"]
+                                        ?.toDouble() ??
+                                    0.0,
+                              ),
                               _buildCircularProgress(
-                                  'Education',
-                                  listing_data!["section_scores"]["education"]
-                                          ?.toDouble() ??
-                                      0.0),
+                                'Education',
+                                listingData!["section_scores"]["education"]
+                                        ?.toDouble() ??
+                                    0.0,
+                              ),
                               _buildCircularProgress(
-                                  'Experience',
-                                  listing_data!["section_scores"]["experience"]
-                                          ?.toDouble() ??
-                                      0.0),
+                                'Experience',
+                                listingData!["section_scores"]["experience"]
+                                        ?.toDouble() ??
+                                    0.0,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 24),
 
-                          // Title Bar
+                          // Skills Analysis Header
                           const Padding(
                             padding: EdgeInsets.only(bottom: 16.0),
                             child: Text(
@@ -200,11 +221,11 @@ class _ApplicationViewState extends State<ApplicationView> {
                             ),
                           ),
 
-                          // Side by Side Cards
+                          // -------- Matching vs Missing --------
                           IntrinsicHeight(
                             child: Row(
                               children: [
-                                // First List Card - Matching Skills
+                                // Matching Skills
                                 Expanded(
                                   child: Card(
                                     child: Padding(
@@ -219,12 +240,12 @@ class _ApplicationViewState extends State<ApplicationView> {
                                                 fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 8),
-                                          if (listing_data!['matched_skills'] !=
+                                          if (listingData!['matched_skills'] !=
                                                   null &&
-                                              (listing_data!['matched_skills']
+                                              (listingData!['matched_skills']
                                                       as List)
                                                   .isNotEmpty)
-                                            ...(listing_data!['matched_skills']
+                                            ...(listingData!['matched_skills']
                                                     as List)
                                                 .map(
                                               (skill) => Padding(
@@ -233,7 +254,6 @@ class _ApplicationViewState extends State<ApplicationView> {
                                                 child: Text('• $skill'),
                                               ),
                                             )
-                                            .toList()
                                           else
                                             const Text(
                                                 'No matching skills found'),
@@ -243,7 +263,8 @@ class _ApplicationViewState extends State<ApplicationView> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Second List Card - Missing Skills
+
+                                // Missing Skills
                                 Expanded(
                                   child: Card(
                                     child: Padding(
@@ -258,12 +279,12 @@ class _ApplicationViewState extends State<ApplicationView> {
                                                 fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 8),
-                                          if (listing_data!['missing_skills'] !=
+                                          if (listingData!['missing_skills'] !=
                                                   null &&
-                                              (listing_data!['missing_skills']
+                                              (listingData!['missing_skills']
                                                       as List)
                                                   .isNotEmpty)
-                                            ...(listing_data!['missing_skills']
+                                            ...(listingData!['missing_skills']
                                                     as List)
                                                 .map(
                                               (skill) => Padding(
@@ -272,7 +293,6 @@ class _ApplicationViewState extends State<ApplicationView> {
                                                 child: Text('• $skill'),
                                               ),
                                             )
-                                            .toList()
                                           else
                                             const Text('No missing skills'),
                                         ],
@@ -283,55 +303,27 @@ class _ApplicationViewState extends State<ApplicationView> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 16),
                         ],
                       ),
                     ),
                   ),
-                  if (listing_data!["overall_summary"] != null &&
-                      (listing_data!["overall_summary"].isNotEmpty)) ...{
+
+                  // -------- Overall Summary --------
+                  if (overallSummary != null && overallSummary.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     _buildInfoCard(
                       title: 'Overall Summary',
-                      bodyText: listing_data!["overall_summary"],
+                      bodyText: overallSummary,
                     ),
-                    const SizedBox(height: 60)
-                  }
+                    const SizedBox(height: 60),
+                  ],
                 ],
               ),
             ),
           );
         },
       ),
-
-      // floatingActionButton: Container(
-      //   width: MediaQuery.of(context).size.width * 0.9,
-      //   padding: const EdgeInsets.symmetric(horizontal: 16),
-      //   child: FloatingActionButton.extended(
-      //     onPressed: isDataLoaded
-      //         ? () {
-      //             applicationService.applyForJob(
-      //               context: context,
-      //               jobPostId: listing_data!["job_post"]["job_post_id"],
-      //               jobSeekerId: listing_data!["job_seeker_id"],
-      //               employerId: listing_data!["job_post"]["employer"]["employer_id"],
-      //               matchConfidence:
-      //                   listing_data!["confidence"]?.toDouble() ?? 0.0,
-      //             );
-      //           }
-      //         : null, // disables until loaded
-      //     backgroundColor: isDataLoaded
-      //         ? AppTheme.primaryColor
-      //         : AppTheme.surfaceColor,
-      //     label: Text(
-      //       isDataLoaded ? 'Apply Now' : 'Loading...',
-      //       style: const TextStyle(color: Colors.white),
-      //     ),
-      //     icon: isDataLoaded ? const Icon(Icons.send, color: Colors.white) : null,
-      //   ),
-      // ),
-      // floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -347,10 +339,11 @@ class _ApplicationViewState extends State<ApplicationView> {
               width: size,
               height: size,
               child: CircularProgressIndicator(
-                  value: progress / 100,
-                  strokeWidth: 8,
-                  backgroundColor: Colors.grey[200],
-                  color: AppTheme.successColor),
+                value: progress / 100,
+                strokeWidth: 8,
+                backgroundColor: Colors.grey[200],
+                color: AppTheme.successColor,
+              ),
             ),
             Text(
               '${(progress).round()}%',

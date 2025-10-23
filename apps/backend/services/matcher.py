@@ -930,9 +930,7 @@ def match_and_enrich(
         else:
             x = dict(r)
             x.pop("job_post", None)
-        # Always remove 'analysis' key before persisting to DB
-        if "analysis" in x:
-            del x["analysis"]
+        # KEEP analysis (Option A)
         out.append(x)
 
     # Persist (best-effort)

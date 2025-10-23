@@ -39,9 +39,7 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -78,9 +76,8 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppTheme.primaryColor,
-                ),
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
               ),
               const SizedBox(height: 16),
               Text(
@@ -150,15 +147,13 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          // Navigate to profile setup
-                        },
+                        onPressed: () {},
                         child: const Text('Get Started'),
                       ),
                     ),
                   ],
                 ),
-              ),  
+              ),
             ),
           ],
         ),
@@ -233,7 +228,7 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const SizedBox(height: 40), // Account for app bar height
+                  const SizedBox(height: 40),
                   _buildProfileAvatar(),
                   const SizedBox(height: 12),
                   Flexible(
@@ -260,8 +255,6 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
                         fontWeight: FontWeight.w400,
                       ),
                       textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -312,11 +305,9 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       value: value,
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: isDestructive ? AppTheme.errorColor : Colors.grey[700],
-          ),
+          Icon(icon,
+              size: 20,
+              color: isDestructive ? AppTheme.errorColor : Colors.grey[700]),
           const SizedBox(width: 12),
           Text(
             title,
@@ -330,6 +321,7 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
     );
   }
 
+  /// --- PROFILE COMPLETION + VERIFIED BADGE (mock) ---
   Widget _buildQuickStats() {
     final completionPercentage = _calculateProfileCompletion();
 
@@ -350,11 +342,8 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.analytics_outlined,
-                color: AppTheme.primaryColor,
-                size: 24,
-              ),
+              Icon(Icons.analytics_outlined,
+                  color: AppTheme.primaryColor, size: 24),
               const SizedBox(width: 12),
               Text(
                 'Profile Completion',
@@ -390,6 +379,8 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 10),
+          const _MockVerifiedBadge(), // mock, always visible
         ],
       ),
     );
@@ -427,13 +418,12 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       children: _profile!.experience.isEmpty
           ? [
               const EmptyStateCard(
-                message: ProfileConstants.noExperienceMessage,
-                icon: Icons.work_outline_rounded,
-              ),
+                  message: ProfileConstants.noExperienceMessage,
+                  icon: Icons.work_outline_rounded)
             ]
           : _profile!.experience
-                .map((exp) => ExperienceCard(experience: exp))
-                .toList(),
+              .map((exp) => ExperienceCard(experience: exp))
+              .toList(),
     );
   }
 
@@ -444,13 +434,12 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       children: _profile!.education.isEmpty
           ? [
               const EmptyStateCard(
-                message: ProfileConstants.noEducationMessage,
-                icon: Icons.school_outlined,
-              ),
+                  message: ProfileConstants.noEducationMessage,
+                  icon: Icons.school_outlined)
             ]
           : _profile!.education
-                .map((edu) => EducationCard(education: edu))
-                .toList(),
+              .map((edu) => EducationCard(education: edu))
+              .toList(),
     );
   }
 
@@ -461,42 +450,18 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       children: [
         if (_profile!.skills.isEmpty)
           const EmptyStateCard(
-            message: ProfileConstants.noSkillsMessage,
-            icon: Icons.psychology_outlined,
-          )
+              message: ProfileConstants.noSkillsMessage,
+              icon: Icons.psychology_outlined)
         else
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _profile!.skills
-                  .map((skill) => _buildSkillChip(skill))
-                  .toList(),
+              children: _profile!.skills.map(_buildSkillChip).toList(),
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildLicensesCertifications() {
-    return ProfileSection(
-      title: 'Licenses & Certifications',
-      icon: Icons.verified_outlined,
-      children: _profile!.licensesCertifications.isEmpty
-          ? [
-              const EmptyStateCard(
-                message: ProfileConstants.noLicensesMessage,
-                icon: Icons.verified_outlined,
-              ),
-            ]
-          : _profile!.licensesCertifications
-                .map((license) => _buildLicenseCard(license))
-                .toList(),
     );
   }
 
@@ -508,44 +473,34 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
       ),
-      child: Text(
-        skill,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.primaryColor,
-        ),
-      ),
+      child: Text(skill,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.primaryColor,
+          )),
     );
   }
 
-  Widget _buildLicenseCard(String license) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.verified_rounded, size: 18, color: AppTheme.successColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              license,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppTheme.darkColor,
-                height: 1.4,
+  Widget _buildLicensesCertifications() {
+    final items = _normalizeLicenses(_profile?.licensesCertifications);
+    final isEmpty = items.isEmpty;
+
+    return ProfileSection(
+      title: 'Licenses & Certifications',
+      icon: Icons.workspace_premium_outlined,
+      children: isEmpty
+          ? const [
+              EmptyStateCard(
+                message: ProfileConstants.noLicensesMessage,
+                icon: Icons.verified_outlined,
               ),
-            ),
-          ),
-        ],
-      ),
+            ]
+          : items.map((it) => _buildLicenseCard(it)).toList(),
     );
   }
+
+  Widget _buildLicenseCard(_LicenseItem item) => _LicenseCard(item: item);
 
   int _calculateProfileCompletion() {
     final fields = [
@@ -556,30 +511,218 @@ class _JobSeekerProfileState extends State<JobSeekerProfile> {
       _profile!.experience.isNotEmpty,
       _profile!.education.isNotEmpty,
     ];
-
-    final completed = fields.where((field) => field).length;
+    final completed = fields.where((f) => f).length;
     return ((completed / fields.length) * 100).round();
   }
 
-  Color _getCompletionColor(int percentage) {
-    return switch (percentage) {
-      >= ProfileConstants.excellentCompletionThreshold => AppTheme.successColor,
-      >= ProfileConstants.goodCompletionThreshold => AppTheme.warningColor,
-      _ => AppTheme.errorColor,
-    };
-  }
+  Color _getCompletionColor(int p) => switch (p) {
+        >= ProfileConstants.excellentCompletionThreshold => AppTheme.successColor,
+        >= ProfileConstants.goodCompletionThreshold => AppTheme.warningColor,
+        _ => AppTheme.errorColor,
+      };
 
-  String _getCompletionMessage(int percentage) {
-    return switch (percentage) {
-      >= ProfileConstants.excellentCompletionThreshold =>
-        ProfileConstants.excellentCompletionMessage,
-      >= ProfileConstants.goodCompletionThreshold =>
-        ProfileConstants.goodCompletionMessage,
-      _ => ProfileConstants.poorCompletionMessage,
-    };
-  }
+  String _getCompletionMessage(int p) => switch (p) {
+        >= ProfileConstants.excellentCompletionThreshold =>
+          ProfileConstants.excellentCompletionMessage,
+        >= ProfileConstants.goodCompletionThreshold =>
+          ProfileConstants.goodCompletionMessage,
+        _ => ProfileConstants.poorCompletionMessage,
+      };
 
   void _handleMenuSelection(String value) {
     if (value == 'logout') _signOut();
+  }
+}
+
+/* ------------------------------ Mock badge ------------------------------ */
+class _MockVerifiedBadge extends StatelessWidget {
+  const _MockVerifiedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppTheme.successColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_rounded, size: 16, color: c),
+          const SizedBox(width: 6),
+          Text(
+            'Verified',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: c,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ------------------ Licenses: model + normalizer + card ------------------ */
+
+class _LicenseItem {
+  final String name;
+  final String? issuer;
+  final String? year;
+  final String? credentialId;
+  final String? url;
+
+  _LicenseItem({
+    required this.name,
+    this.issuer,
+    this.year,
+    this.credentialId,
+    this.url,
+  });
+}
+
+// Accepts List<String> OR List<Map> OR null
+List<_LicenseItem> _normalizeLicenses(dynamic raw) {
+  final List<_LicenseItem> out = [];
+  if (raw == null) return out;
+
+  if (raw is List) {
+    for (final e in raw) {
+      if (e is String) {
+        final t = e.trim();
+        if (t.isNotEmpty) out.add(_LicenseItem(name: t));
+      } else if (e is Map) {
+        final name =
+            (e['name'] ?? e['title'] ?? e['certificate'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+
+        final issuer =
+            (e['issuer'] ?? e['organization'] ?? e['provider'] ?? '')
+                .toString()
+                .trim();
+        final year =
+            (e['year'] ?? e['issuedAt'] ?? e['issue_date'] ?? '')
+                .toString()
+                .trim();
+        final credId =
+            (e['credentialId'] ?? e['id'] ?? '').toString().trim();
+        final url = (e['url'] ?? e['link'] ?? '').toString().trim();
+
+        out.add(_LicenseItem(
+          name: name,
+          issuer: issuer.isEmpty ? null : issuer,
+          year: year.isEmpty ? null : year,
+          credentialId: credId.isEmpty ? null : credId,
+          url: url.isEmpty ? null : url,
+        ));
+      }
+    }
+  }
+  return out;
+}
+
+class _LicenseCard extends StatelessWidget {
+  final _LicenseItem item;
+  const _LicenseCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Leading icon block (Education-style)
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.verified_outlined,
+                color: AppTheme.primaryColor, size: 22),
+          ),
+          const SizedBox(width: 12),
+          // Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.darkColor,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Meta row (issuer • year • credential id)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: [
+                    if (item.issuer != null && item.issuer!.isNotEmpty)
+                      _metaChip(Icons.business_outlined, item.issuer!),
+                    if (item.year != null && item.year!.isNotEmpty)
+                      _metaChip(Icons.calendar_month_outlined, item.year!),
+                    if (item.credentialId != null &&
+                        item.credentialId!.isNotEmpty)
+                      _metaChip(
+                          Icons.badge_outlined, 'ID: ${item.credentialId}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey[700]),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

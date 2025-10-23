@@ -8,10 +8,10 @@ import 'package:hiway_app/widgets/common/app_theme.dart';
 
 class JobSeekerRoadmap extends StatefulWidget {
   final String title;
-  final String email; // required to resolve seeker
-  final String? role; // optional override (else uses seeker.target_role)
-  final bool force;   // optional recompute toggle
-  final OrchestratorResponse? initialData; // optional: pass pre-fetched response
+  final String email;
+  final String? role;
+  final bool force;
+  final OrchestratorResponse? initialData;
 
   const JobSeekerRoadmap({
     super.key,
@@ -27,72 +27,20 @@ class JobSeekerRoadmap extends StatefulWidget {
 }
 
 class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
-  // painter node radius (kept constant for painter + hit targets)
-  static const double nodeRadius = 16.0;
-
-  // Full list of possible alignments (for up to 10 nodes)
-  final List<Alignment> allNodeAlignments = const [
-    Alignment(0, -0.8),
-    Alignment(-0.55, -0.6),
-    Alignment(0, -0.35),
-    Alignment(0.55, -0.2),
-    Alignment(0.55, 0),
-    Alignment(0, 0.2),
-    Alignment(-0.55, 0.2),
-    Alignment(-0.55, 0.4),
-    Alignment(0, 0.5),
-    Alignment(0, 0.7),
-  ];
-
   final _svc = ServiceFactory.orchestrator;
-
   OrchestratorResponse? _data;
   String? _error;
   bool _loading = true;
 
-  // Derived UI state
-  List<Alignment> nodeAlignments = const [];
   List<RoadmapStepDetail> steps = const [];
-  String activeLabel = '—'; // current milestone title
-
-  // Indices
-  int? _currentIndex; // "you are here"
-  int? _nextIndex;    // "next target"
+  String activeLabel = '—';
+  int? _currentIndex;
+  int? _nextIndex;
 
   @override
   void initState() {
     super.initState();
     _fetch();
-  }
-
-  // --- Responsive label helpers ---
-  String _responsiveLabel(String label, double canvasWidth) {
-    var s = label.replaceAll(RegExp(r'\s*[\(\[].*?[\)\]]'), '').trim();
-    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final int maxChars = () {
-      if (canvasWidth < 340) return 16;
-      if (canvasWidth < 380) return 20;
-      if (canvasWidth < 430) return 24;
-      if (canvasWidth < 520) return 28;
-      return 32;
-    }();
-    if (s.length <= maxChars) return s;
-    final cut = s.lastIndexOf(' ', maxChars);
-    final end = (cut >= 10) ? cut : maxChars;
-    return '${s.substring(0, end).trimRight()}…';
-  }
-
-  double _clampDouble(double v, double min, double max) =>
-      v < min ? min : (v > max ? max : v);
-
-  double _measureChipWidth(String text, TextStyle style, double maxWidth) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: maxWidth);
-    return math.min(maxWidth, tp.width + 24); // + horizontal padding
   }
 
   Future<void> _fetch() async {
@@ -109,14 +57,9 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
           );
       _data = resp;
 
-      if (_data == null) {
-        throw Exception('Failed to get roadmap data. Please try again.');
-      }
+      if (_data == null) throw Exception('Failed to get roadmap data.');
 
-      // Build steps from roadmap milestones
       final milestones = resp.roadmap?.milestones ?? [];
-
-      // Map milestone data to UI models
       final labels = <String>[];
       final levels = <String>[];
       final resources = <List<Map<String, String>>>[];
@@ -125,82 +68,39 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
 
       for (int i = 0; i < milestones.length; i++) {
         final m = milestones[i];
-        final label = m.title ?? m.milestone ?? 'Milestone ${i + 1}';
-        final level = m.level ?? '';
-
-        labels.add(label);
-        levels.add(level.isEmpty ? '—' : level);
-
+        labels.add(m.title ?? m.milestone ?? 'Milestone ${i + 1}');
+        levels.add(m.level ?? '—');
         resources.add(m.resources
-            .map((r) => {
-                  'title': r.title,
-                  'source': r.source ?? '',
-                  'url': r.url ?? '',
-                })
+            .map((r) => {'title': r.title, 'source': r.source ?? '', 'url': r.url ?? ''})
             .toList());
-
         certs.add(m.certifications
-            .map((r) => {
-                  'title': r.title,
-                  'source': r.source ?? '',
-                  'url': r.url ?? '',
-                })
+            .map((r) => {'title': r.title, 'source': r.source ?? '', 'url': r.url ?? ''})
             .toList());
-
         groups.add(m.networkGroups
-            .map((r) => {
-                  'title': r.title,
-                  'source': r.source ?? '',
-                  'url': r.url ?? '',
-                })
+            .map((r) => {'title': r.title, 'source': r.source ?? '', 'url': r.url ?? ''})
             .toList());
       }
 
-      final cappedCount = _capToAlignments(labels.length);
-      steps = List.generate(cappedCount, (i) {
-        return RoadmapStepDetail(
+      steps = List.generate(
+        labels.length,
+        (i) => RoadmapStepDetail(
           label: labels[i],
           level: levels[i],
           resources: resources[i],
           certifications: certs[i],
           networkGroups: groups[i],
-        );
-      });
+        ),
+      );
 
-      nodeAlignments = List.generate(cappedCount, (i) => allNodeAlignments[i]);
-
-      // Active / Next
       final ms = _data?.milestoneStatus;
-      activeLabel = ms?.currentMilestone ??
-          ((ms?.milestonesScored.isNotEmpty == true &&
-                  ms?.milestonesScored.first.title != null)
-              ? ms!.milestonesScored.first.title!
-              : '—');
-
+      activeLabel = ms?.currentMilestone ?? '—';
       _currentIndex = _findIndexByLabel(ms?.currentMilestone, steps);
       _nextIndex = _findIndexByLabel(ms?.nextMilestone, steps);
 
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
     } catch (e) {
-      String errorMessage;
-      if (e is DioException) {
-        if (e.type == DioExceptionType.receiveTimeout) {
-          errorMessage =
-              'Request timed out. The server is taking too long to respond. Please try again.';
-        } else if (e.type == DioExceptionType.connectionTimeout) {
-          errorMessage =
-              'Could not connect to the server. Please check your internet connection.';
-        } else {
-          errorMessage = 'Network error: ${e.message}';
-        }
-      } else {
-        errorMessage = e.toString();
-      }
-
       setState(() {
-        _error = errorMessage;
+        _error = e.toString();
         _loading = false;
       });
     }
@@ -221,7 +121,168 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
     return null;
   }
 
-  int _capToAlignments(int n) => n.clamp(0, allNodeAlignments.length);
+  List<Offset> _calculateNodePositions(int count, double width, double height) {
+    final positions = <Offset>[];
+    if (count <= 0) return positions;
+
+    final centerX = width / 2;
+    final startY = 140.0;
+    final endY = math.max(startY + 1, height - 180.0);
+
+    final denom = math.max(1, count - 1);
+    final spacing = (endY - startY) / denom;
+
+    for (int i = 0; i < count; i++) {
+      final progress = denom == 0 ? 0.0 : i / denom;
+      final y = startY + spacing * i;
+      final amplitude = width * 0.28;
+      final x = centerX + amplitude * math.sin(progress * math.pi * 2);
+      positions.add(Offset(x, y));
+    }
+    return positions;
+  }
+
+  /// Format label as exactly 3 words per line, up to 2 lines.
+  /// If there are more words than 6, add a 3rd line with just "....".
+  String _formatLabelTwoLinesThenDots(String text,
+      {int wordsPerLine = 3, int maxLines = 2}) {
+    final words =
+        text.split(RegExp(r'\s+')).where((w) => w.trim().isNotEmpty).toList();
+    if (words.isEmpty) return text;
+
+    final lines = <String>[];
+    int i = 0;
+    for (int line = 0; line < maxLines && i < words.length; line++) {
+      final end = math.min(i + wordsPerLine, words.length);
+      lines.add(words.sublist(i, end).join(' '));
+      i = end;
+    }
+
+    if (i < words.length) {
+      lines.add('....'); // third line = dots
+    }
+
+    return lines.join('\n');
+  }
+
+  List<Widget> _buildMilestoneWidgets(
+    BuildContext context,
+    List<RoadmapStepDetail> steps,
+    List<Offset> nodePositions,
+    double width,
+  ) {
+    final widgets = <Widget>[];
+
+    const double nodeDiameter = 30.0;
+    const double margin = 8.0;
+    const double spacing = 18.0;
+    final double labelWidth = math.min(width * 0.45, 260.0);
+
+    for (int i = 0; i < steps.length; i++) {
+      final pos = nodePositions[i];
+      final step = steps[i];
+      final isCompleted = i <= (_currentIndex ?? -1);
+      final isNext = i == _nextIndex;
+
+      // Static node color (tap does not change visuals)
+      Color nodeColor;
+      if (isCompleted) {
+        nodeColor = Colors.green;
+      } else if (isNext) {
+        nodeColor = const Color(0xFFFF6B35);
+      } else {
+        nodeColor = Colors.white;
+      }
+
+      // Node
+      widgets.add(Positioned(
+        left: pos.dx - (nodeDiameter / 2),
+        top: pos.dy - (nodeDiameter / 2),
+        child: GestureDetector(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.white,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              builder: (context) => RoadmapStepOverlay(step: step),
+            );
+          },
+          child: Container(
+            width: nodeDiameter,
+            height: nodeDiameter,
+            decoration: BoxDecoration(
+              color: nodeColor,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+          ),
+        ),
+      ));
+
+      // Preferred side (alternate), then auto-flip if border would be hit
+      bool placeLeft = i.isEven;
+      double candidateX =
+          placeLeft ? pos.dx - labelWidth - spacing : pos.dx + (nodeDiameter / 2) + spacing;
+
+      if (candidateX < margin) {
+        placeLeft = false;
+        candidateX = pos.dx + (nodeDiameter / 2) + spacing;
+      }
+      if (candidateX + labelWidth > width - margin) {
+        placeLeft = true;
+        candidateX = pos.dx - labelWidth - spacing;
+      }
+      final left = candidateX.clamp(margin, width - labelWidth - margin);
+
+      // Two lines of 3 words each, then "...." if more
+      final formatted = _formatLabelTwoLinesThenDots(step.label);
+
+      widgets.add(Positioned(
+        left: left,
+        top: pos.dy - 22,
+        width: labelWidth,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(0, 255, 255, 255).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            step.label,
+            textAlign: placeLeft ? TextAlign.right : TextAlign.left,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              letterSpacing: 0.2,
+            ),
+            maxLines: 2, // show up to 2 lines
+            overflow: TextOverflow.ellipsis, // show "...." automatically
+            softWrap: true,
+          ),
+        ),
+      ));
+    }
+
+    return widgets;
+  }
+
+  String _resolveRoleTitle() {
+    final fromWidget = widget.role?.trim();
+    if (fromWidget != null && fromWidget.isNotEmpty) return fromWidget;
+
+    final fromRoadmap = _data?.roadmap?.role;
+    if (fromRoadmap != null && fromRoadmap.trim().isNotEmpty) return fromRoadmap.trim();
+
+    final fromStatus = _data?.milestoneStatus?.nextMilestone;
+    if (fromStatus != null && fromStatus.trim().isNotEmpty) {
+      return fromStatus.trim();
+    }
+    return 'Target Role';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,157 +313,93 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
                       builder: (context, constraints) {
                         final width = constraints.maxWidth;
                         final height = constraints.maxHeight;
-
-                        // Node pixel positions
-                        final nodePixelPositions = nodeAlignments.map((alignment) {
-                          return Offset(
-                            (alignment.x + 1) / 2 * width,
-                            (alignment.y + 1) / 2 * height,
-                          );
-                        }).toList();
-
-                        // Colors per node (green = completed, red = next, blue = default)
-                        final defaultBlue = const Color(0xFF0E5AA6);
-                        final green = const Color(0xFF2E7D32);
-                        final red = const Color(0xFFE53935);
-
-                        final List<Color> nodeColors =
-                            List<Color>.filled(nodePixelPositions.length, defaultBlue);
-
-                        final completedUpTo = _currentIndex ?? -1;
-                        for (int i = 0; i <= completedUpTo && i < nodeColors.length; i++) {
-                          nodeColors[i] = green;
-                        }
-                        if (_nextIndex != null &&
-                            _nextIndex! >= 0 &&
-                            _nextIndex! < nodeColors.length) {
-                          nodeColors[_nextIndex!] = red;
-                        }
-
-                        // Responsive labels for chips
-                        final painterLabels =
-                            steps.map((e) => _responsiveLabel(e.label, width)).toList();
-
-                        // Title chips under nodes (centered, non-overlapping)
-                        final List<Widget> titleChips = [];
-                        final List<Rect> placed = [];
-                        final chipTextStyle = const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        );
-                        final double maxChipWidth = math.min(width * 0.75, 280.0);
-                        const double chipHeight = 40.0;
-                        const double vGap = 8.0;
-
-                        final indexOrder =
-                            List<int>.generate(nodePixelPositions.length, (i) => i)
-                              ..sort((a, b) => nodePixelPositions[a]
-                                  .dy
-                                  .compareTo(nodePixelPositions[b].dy));
-
-                        for (final i in indexOrder) {
-                          final pos = nodePixelPositions[i];
-                          final text = painterLabels[i];
-                          final w = _measureChipWidth(text, chipTextStyle, maxChipWidth);
-
-                          double left = _clampDouble(pos.dx - w / 2, 8, width - w - 8);
-                          double top =
-                              _clampDouble(pos.dy + nodeRadius + 10, 8, height - chipHeight - 8);
-
-                          Rect rect = Rect.fromLTWH(left, top, w, chipHeight);
-
-                          bool collided = true;
-                          int safety = 0;
-                          while (collided && safety < 50) {
-                            collided = false;
-                            for (final r in placed) {
-                              if (rect.overlaps(r)) {
-                                top = r.bottom + vGap;
-                                top = _clampDouble(top, 8, height - chipHeight - 8);
-                                rect = Rect.fromLTWH(left, top, w, chipHeight);
-                                collided = true;
-                              }
-                            }
-                            safety++;
-                          }
-                          placed.add(rect);
-
-                          titleChips.add(Positioned(
-                            left: rect.left,
-                            top: rect.top,
-                            width: rect.width,
-                            height: rect.height,
-                            child: const _TitleChipWrapper(),
-                          ));
-                          titleChips.add(Positioned(
-                            left: rect.left,
-                            top: rect.top,
-                            width: rect.width,
-                            height: rect.height,
-                            child: _TitleChip(text: text),
-                          ));
-                        }
-
-                        // Check icons centered on completed (green) nodes
-                        final List<Widget> checkIcons = [];
-                        for (int i = 0; i <= completedUpTo && i < nodePixelPositions.length; i++) {
-                          final pos = nodePixelPositions[i];
-                          checkIcons.add(Positioned(
-                            left: pos.dx - 10,
-                            top: pos.dy - 10,
-                            child: const IgnorePointer(
-                              ignoring: true,
-                              child: Icon(Icons.check, size: 20, color: Colors.white),
-                            ),
-                          ));
-                        }
+                        final nodePositions =
+                            _calculateNodePositions(steps.length, width, height);
+                        final roleTitle = _resolveRoleTitle();
 
                         return Stack(
                           children: [
-                            // Lines + node circles (color per node; edges connect at circle edges)
-                            CustomPaint(
-                              painter: _RoadmapPainter(
-                                nodePixelPositions: nodePixelPositions,
-                                nodeRadius: nodeRadius,
-                                nodeColors: nodeColors,
+                            // Background gradient
+                            Container(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [Color(0xFF4338CA), Color(0xFF1E1B4B)],
+                                ),
                               ),
-                              size: Size(width, height),
                             ),
 
-                            // Tap targets (invisible)
-                            for (int i = 0; i < nodePixelPositions.length; i++)
-                              Positioned(
-                                left: nodePixelPositions[i].dx - nodeRadius,
-                                top: nodePixelPositions[i].dy - nodeRadius,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      backgroundColor: Colors.white,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(
-                                          top: Radius.circular(16),
-                                        ),
-                                      ),
-                                      builder: (context) {
-                                        return RoadmapStepOverlay(step: steps[i]);
-                                      },
-                                    );
-                                  },
+                            // Role title (above roadmap)
+                            Positioned(
+                              left: 16,
+                              right: 16,
+                              top: 12,
+                              child: SafeArea(
+                                bottom: false,
+                                child: Center(
                                   child: Container(
-                                    width: nodeRadius * 2,
-                                    height: nodeRadius * 2,
-                                    color: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.18),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      roleTitle,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
+                            ),
 
-                            // Check icons on completed nodes
-                            ...checkIcons,
+                            // Dotted center line
+                            Positioned(
+                              left: width / 2 - 1,
+                              top: 100,
+                              bottom: 100,
+                              child: CustomPaint(
+                                size: Size(2, height - 200),
+                                painter: _DottedLinePainter(),
+                              ),
+                            ),
 
-                            // Title chips under nodes
-                            ...titleChips,
+                            // Curved path
+                            CustomPaint(
+                              size: Size(width, height),
+                              painter: _CurvedPathPainter(nodePositions: nodePositions),
+                            ),
+
+                            // Nodes + labels
+                            ..._buildMilestoneWidgets(
+                                context, steps, nodePositions, width),
+
+                            // Footer hint
+                            Positioned(
+                              left: 20,
+                              right: 20,
+                              bottom: 40,
+                              child: Text(
+                                'Tap on nodes to view progress, performance and action items',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 14,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ],
                         );
                       },
@@ -411,128 +408,55 @@ class _JobSeekerRoadmapState extends State<JobSeekerRoadmap> {
   }
 }
 
-class _TitleChipWrapper extends StatelessWidget {
-  const _TitleChipWrapper();
+class _DottedLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.3)
+      ..strokeWidth = 2;
+    const dashHeight = 5;
+    const dashSpace = 5;
+    double startY = 0;
+    while (startY < size.height) {
+      canvas.drawLine(
+        Offset(size.width / 2, startY),
+        Offset(size.width / 2, startY + dashHeight),
+        paint,
+      );
+      startY += dashHeight + dashSpace;
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    // subtle shadow layer beneath the chip text
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _TitleChip extends StatelessWidget {
-  final String text;
-  const _TitleChip({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.black87,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              height: 1.05,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Painter that draws smooth connecting curves between nodes,
-/// and the node circles themselves. Labels are drawn by widgets above.
-class _RoadmapPainter extends CustomPainter {
-  final List<Offset> nodePixelPositions;
-  final double nodeRadius;
-  final List<Color> nodeColors;
-
-  _RoadmapPainter({
-    required this.nodePixelPositions,
-    required this.nodeRadius,
-    required this.nodeColors,
-  });
+class _CurvedPathPainter extends CustomPainter {
+  final List<Offset> nodePositions;
+  _CurvedPathPainter({required this.nodePositions});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (nodePixelPositions.isEmpty) return;
-
-    // Curve style
+    if (nodePositions.length < 2) return;
     final pathPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
-    // Draw smooth connections between consecutive nodes.
-    // Start/end on the circle EDGE (not center) so the line visibly meets the node.
-    for (int i = 0; i < nodePixelPositions.length - 1; i++) {
-      final c0 = nodePixelPositions[i];
-      final c1 = nodePixelPositions[i + 1];
-
-      final vec = Offset(c1.dx - c0.dx, c1.dy - c0.dy);
-      final len = vec.distance;
-      if (len <= 0.0001) continue;
-      final u = vec / len;
-
-      final p0 = c0 + u * nodeRadius;      // start at edge of first circle
-      final p1 = c1 - u * nodeRadius;      // end at edge of next circle
-
-      final dx = p1.dx - p0.dx;
-      final bend = 0.9;
-      final cp1 = Offset(p0.dx + dx * bend, p0.dy);
-      final cp2 = Offset(p1.dx - dx * bend, p1.dy);
-
-      final path = Path()..moveTo(p0.dx, p0.dy);
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p1.dx, p1.dy);
-      canvas.drawPath(path, pathPaint);
+    final path = Path()..moveTo(nodePositions[0].dx, nodePositions[0].dy);
+    for (int i = 0; i < nodePositions.length - 1; i++) {
+      final c = nodePositions[i];
+      final n = nodePositions[i + 1];
+      final midY = (c.dy + n.dy) / 2;
+      path.cubicTo(c.dx, midY, n.dx, midY, n.dx, n.dy);
     }
-
-    // Draw nodes (fill per state + white stroke)
-    final stroke = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-
-    for (int i = 0; i < nodePixelPositions.length; i++) {
-      final p = nodePixelPositions[i];
-      final fill = Paint()
-        ..color = (i < nodeColors.length) ? nodeColors[i] : const Color(0xFF0E5AA6)
-        ..style = PaintingStyle.fill;
-
-      canvas.drawCircle(p, nodeRadius, fill);
-      canvas.drawCircle(p, nodeRadius, stroke);
-    }
+    canvas.drawPath(path, pathPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _RoadmapPainter oldDelegate) {
-    return oldDelegate.nodePixelPositions != nodePixelPositions ||
-        oldDelegate.nodeRadius != nodeRadius ||
-        oldDelegate.nodeColors != nodeColors;
-  }
+  bool shouldRepaint(covariant _CurvedPathPainter oldDelegate) =>
+      oldDelegate.nodePositions != nodePositions;
 }
 
 class _ErrorState extends StatelessWidget {
@@ -570,14 +494,10 @@ class _ErrorState extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
-
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text(
-        'No roadmap milestones yet.',
-        style: TextStyle(color: Colors.white),
-      ),
+      child: Text('No roadmap milestones yet.', style: TextStyle(color: Colors.white)),
     );
   }
 }
